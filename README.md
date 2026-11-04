@@ -55,6 +55,7 @@ Read in this order; each file builds on the one before.
 | `src/pages/MyLoans.jsx` | Deriving lists from one response; tabs |
 | `src/pages/Browse.jsx` | Filters, debounced search (`hooks/useDebounce.js`), "show more" paging |
 | `src/components/*Card.jsx`, `FineTicket.jsx` | Small presentational components that only receive props |
+| `src/theme.jsx` | **Context again**: the light/dark preference, saved on the device and applied to `<html data-theme>` |
 | `src/utils/format.js` | Plain functions (dates, "due in 2 days", pesos), easy to test |
 | `src/*.test.*`, `src/pages/*.test.jsx` | How each part is tested; `src/test/helpers.jsx` fakes the API |
 
@@ -67,6 +68,16 @@ Sign in, Register (students, teachers and staff pick their role; teacher and sta
 an admin's approval), Home, My loans (current and history, with days left), Fines (tickets with a QR
 reference for the counter), For you (recommendations with the reason for each), Browse (search,
 category, genre, available only) and Profile (account, ID card status, install, sign out).
+
+## Light and dark mode
+
+Profile -> Appearance offers **System** (follows the phone, the default), **Light** and **Dark**; the
+sun/moon button in the top bar flips between light and dark quickly. The choice is saved in the
+browser (`equipflow.theme`). A small script in `index.html` applies it before the page first draws, so
+there is no white flash, and `src/theme.jsx` keeps it in sync afterwards (including the address-bar colour).
+
+All colours are variables at the top of `src/styles.css`, defined once for light and once for dark, and
+the design uses solid colours only. To change the look, edit those values.
 
 ## The PWA
 

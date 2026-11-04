@@ -5,6 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#1d4ed8" />
     <meta name="description" content="Borrow and track school equipment and books." />
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      // Apply the saved light/dark choice before the page draws, so there is no flash.
+      // (The same rules live in src/theme.jsx; keep the two in sync.)
+      (function () {
+        try {
+          var saved = localStorage.getItem('equipflow.theme')
+          var dark = saved === 'dark' ||
+            ((saved !== 'light') && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches)
+          var root = document.documentElement
+          root.dataset.theme = dark ? 'dark' : 'light'
+          root.style.colorScheme = dark ? 'dark' : 'light'
+          var meta = document.querySelector('meta[name="theme-color"]')
+          if (meta) meta.setAttribute('content', dark ? '#161b24' : '#1d4ed8')
+        } catch (e) {}
+      })()
+    </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <title>EquipFlow</title>

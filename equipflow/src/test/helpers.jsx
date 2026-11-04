@@ -2,6 +2,7 @@ import { vi } from 'vitest'
 import { render } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { AuthProvider } from '../auth'
+import { ThemeProvider } from '../theme'
 import App from '../App'
 
 /** A fake `fetch` Response. */
@@ -46,10 +47,12 @@ export function loan(overrides = {}) {
 export function renderApp(path = '/', { loggedIn = true } = {}) {
   if (loggedIn) localStorage.setItem('equipflow.token', 'test-token')
   return render(
-    <MemoryRouter initialEntries={[path]}>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
-    </MemoryRouter>,
+    <ThemeProvider>
+      <MemoryRouter initialEntries={[path]}>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </MemoryRouter>
+    </ThemeProvider>,
   )
 }

@@ -6,5 +6,7 @@ import { cleanup } from '@testing-library/react'
 afterEach(() => {
   cleanup()
   localStorage.clear()
+  document.documentElement.removeAttribute('data-theme')
+  document.documentElement.style.colorScheme = ''
   vi.unstubAllGlobals()
 })

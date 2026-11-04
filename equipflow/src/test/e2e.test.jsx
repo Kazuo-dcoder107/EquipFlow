@@ -6,9 +6,12 @@
 //
 // Skipped in a normal `npm test`, because it needs the backend and the demo data.
 import { describe, expect, it } from 'vitest'
-import { screen, within } from '@testing-library/react'
+import { configure, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderApp } from './helpers'
+
+// The real server hashes passwords, which can take a moment when the machine is busy.
+configure({ asyncUtilTimeout: 4000 })
 
 async function signIn(srCode, password = 'password123') {
   renderApp('/login', { loggedIn: false })

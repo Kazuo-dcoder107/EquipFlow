@@ -41,9 +41,11 @@ export function setUnauthorizedHandler(handler) {
  *   params - query string values, e.g. { limit: 20 } (empty values are skipped)
  *   json   - object sent as a JSON body
  *   form   - object sent as a form body (the login endpoint wants this)
+ *   formData - a FormData (used to upload files)
+ *   blob   - true when the answer is a picture/file instead of JSON
  *   auth   - false for calls that must not send the token (login, register)
  */
-async function request(path, { method = 'GET', params, json, form, auth = true } = {}) {
+async function request(path, { method = 'GET', params, json, form, formData, blob = false, auth = true } = {}) {
   const url = new URL(BASE_URL + path)
   Object.entries(params || {}).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, value)
@@ -59,6 +61,8 @@ async function request(path, { method = 'GET', params, json, form, auth = true }
     body = JSON.stringify(json)
   } else if (form) {
     body = new URLSearchParams(form) // the browser sets the form Content-Type itself
+  } else if (formData) {
+    body = formData // the browser adds the multipart Content-Type (with its boundary)
   }
 
   let response
@@ -70,7 +74,7 @@ async function request(path, { method = 'GET', params, json, form, auth = true }
 
   let data = null
   try {
-    data = await response.json()
+    data = blob && response.ok ? await response.blob() : await response.json()
   } catch {
     // an empty or non-JSON body is fine
   }
@@ -96,6 +100,16 @@ export const api = {
   transactions: (params) => request('/api/me/transactions', { params }),
   penalties: (params) => request('/api/me/penalties', { params }),
   recommendations: (limit = 5) => request('/api/me/recommendations', { params: { limit } }),
+
+  // profile photo: uploaded as a file, downloaded as a picture (needs the login token,
+  // so it is fetched here and shown from memory rather than put straight into an <img src>)
+  uploadAvatar: (picture) => {
+    const formData = new FormData()
+    formData.append('file', picture, 'avatar.jpg')
+    return request('/api/me/avatar', { method: 'PUT', formData })
+  },
+  deleteAvatar: () => request('/api/me/avatar', { method: 'DELETE' }),
+  avatar: (version) => request('/api/me/avatar', { params: { v: version }, blob: true }),
 
   equipment: (params) => request('/api/equipment', { params }),
   categories: () => request('/api/categories'),

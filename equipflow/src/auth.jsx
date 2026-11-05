@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { api, clearToken, getToken, setToken, setUnauthorizedHandler } from './api'
+import { clearAvatarCache } from './hooks/useAvatar'
 
 // A React "context" shares data with every component below it without passing props
 // through each level. Here it shares: who is logged in, and the login/logout actions.
@@ -12,6 +13,7 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(() => {
     clearToken()
+    clearAvatarCache() // do not leave this person's photo in memory for the next user
     setUser(null)
   }, [])
 

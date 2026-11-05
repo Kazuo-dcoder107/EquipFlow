@@ -2,6 +2,7 @@ import { NavLink, Link, Outlet } from 'react-router-dom'
 import { useAuth } from '../auth'
 import { useTheme } from '../theme'
 import { firstName } from '../utils/format'
+import Avatar from './Avatar'
 import { BooksIcon, HomeIcon, LogoMark, MoonIcon, SearchIcon, SparkIcon, SunIcon, TicketIcon } from './Icons'
 
 const TABS = [
@@ -36,8 +37,8 @@ export default function Layout() {
           >
             {resolved === 'dark' ? <SunIcon size={20} /> : <MoonIcon size={20} />}
           </button>
-          <Link to="/profile" className="avatar" aria-label={`Profile of ${name}`}>
-            {name.charAt(0).toUpperCase()}
+          <Link to="/profile" className="avatar-link" aria-label={`Profile of ${name}`}>
+            <Avatar size="sm" />
           </Link>
         </div>
       </header>

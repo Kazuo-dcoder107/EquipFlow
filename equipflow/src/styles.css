@@ -31,6 +31,8 @@
   --neutral: #586177; --neutral-bg: #e8ebf2;
 
   --shadow: 0 1px 2px rgba(15, 23, 41, 0.05), 0 2px 8px rgba(15, 23, 41, 0.04);
+  --shadow-hover: 0 6px 18px rgba(15, 23, 41, 0.10);
+  --accent-border: #bccdfb;  /* card edge while hovered */
 }
 
 :root[data-theme='dark'] {
@@ -61,6 +63,8 @@
   --neutral: #9aa5b8; --neutral-bg: #232b3a;
 
   --shadow: none;
+  --shadow-hover: 0 6px 18px rgba(0, 0, 0, 0.4);
+  --accent-border: #3a5090;
 }
 
 :root {
@@ -132,25 +136,65 @@ a { color: var(--accent); }
 .topbar-actions { display: flex; align-items: center; gap: 0.5rem; }
 
 .icon-btn,
-.avatar {
+.avatar-link {
   display: grid;
   place-items: center;
   width: 38px;
   height: 38px;
   border: 0;
   border-radius: 50%;
-  background: var(--topbar-chip);
   color: var(--topbar-text);
-  font: inherit;
-  font-weight: 700;
   text-decoration: none;
   cursor: pointer;
 }
+.icon-btn { background: var(--topbar-chip); font: inherit; }
+
+/* ---- profile pictures: the photo, or the first letter of the name ---- */
+
+.avatar-circle {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+  line-height: 1;
+  user-select: none;
+}
+.avatar-circle img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.avatar-sm { width: 38px; height: 38px; font-size: 1rem; }
+.avatar-md { width: 48px; height: 48px; font-size: 1.2rem; }
+.avatar-lg { width: 56px; height: 56px; font-size: 1.5rem; }
+.avatar-xl { width: 96px; height: 96px; font-size: 2.4rem; }
+.topbar .avatar-circle { background: var(--topbar-chip); color: var(--topbar-text); }
+
+.greeting { display: flex; align-items: center; gap: 0.9rem; margin: 0.2rem 0 1rem; }
+.greeting h1 { margin: 0; }
+
+.photo-card { display: flex; align-items: center; gap: 1.1rem; }
+.photo-frame { position: relative; flex: none; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; }
+.photo-frame:disabled { cursor: progress; opacity: 0.7; }
+.photo-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(15, 23, 41, 0.72); /* a plain see-through layer, not a gradient */
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.photo-name { margin: 0; font-size: 1.1rem; font-weight: 700; }
+.photo-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.7rem; }
+
 .logo-tile { fill: var(--logo-tile); }
 .logo-bars { fill: var(--logo-bars); }
 
 .icon-btn:active,
-.avatar:active { transform: scale(0.94); }
+.avatar-link:active { transform: scale(0.94); }
 
 .page {
   max-width: 720px;
@@ -158,6 +202,7 @@ a { color: var(--accent); }
   padding: 1.2rem 1rem calc(6rem + env(safe-area-inset-bottom));
 }
 .page section { margin-bottom: 1.6rem; }
+.page section.photo-card { margin-bottom: 0.75rem; }
 
 .tabbar {
   position: fixed;
@@ -332,7 +377,7 @@ input, select {
 }
 input::placeholder { color: var(--muted); }
 input:focus-visible, select:focus-visible, .btn:focus-visible, .tab:focus-visible,
-.icon-btn:focus-visible, .avatar:focus-visible, .tabs button:focus-visible {
+.icon-btn:focus-visible, .avatar-link:focus-visible, .tabs button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -412,8 +457,60 @@ input:focus-visible, select:focus-visible, .btn:focus-visible, .tab:focus-visibl
   .tabbar { max-width: 720px; margin: 0 auto; border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
 }
 
+/* ---- hover effects ----
+   Only for devices with a real mouse. On a phone a tap leaves "hover" stuck on, so touch
+   screens skip all of this. Colours stay solid; only edges, shadows and small moves change. */
+
+.card,
+.stat { transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s; }
+.btn,
+.tabs button,
+.segmented label,
+.icon-btn { transition: background 0.15s, color 0.15s, transform 0.15s, border-color 0.15s; }
+.icon-btn svg { transition: transform 0.25s; }
+
+@media (hover: hover) and (pointer: fine) {
+  /* cards and number tiles rise a little */
+  .card:hover,
+  .stat:hover {
+    transform: translateY(-2px);
+    border-color: var(--accent-border);
+    box-shadow: var(--shadow-hover);
+  }
+  .stats .stat:first-child:hover,
+  .stat-danger:hover { border-color: transparent; }
+
+  /* buttons */
+  .btn:hover:not(:disabled) { background: var(--surface-2); transform: translateY(-1px); }
+  .btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
+  .btn-danger:hover:not(:disabled) { background: var(--danger-bg); border-color: transparent; }
+
+  /* bottom tabs: the icon pill appears under the pointer */
+  .tab:hover { color: var(--text); }
+  .tab:hover .tab-icon { background: var(--surface-2); }
+  .tab.active:hover { color: var(--accent); }
+  .tab.active:hover .tab-icon { background: var(--accent-soft); }
+
+  /* top bar */
+  .icon-btn:hover { background: var(--topbar-text); color: var(--topbar-bg); }
+  .icon-btn:hover svg { transform: rotate(20deg); }
+  .avatar-link:hover .avatar-circle { box-shadow: 0 0 0 2px var(--topbar-text); }
+
+  /* links */
+  a:not(.btn):not(.tab):not(.brand):not(.avatar-link):hover { text-decoration: underline; text-underline-offset: 3px; }
+
+  /* switches */
+  .tabs button:not(.on):hover,
+  .segmented label:not(.on):hover { background: var(--surface); color: var(--text); }
+
+  /* the profile photo shows a camera when the pointer is over it */
+  .photo-frame:hover:not(:disabled) .photo-overlay { opacity: 1; }
+}
+.photo-frame:focus-visible .photo-overlay { opacity: 1; }
+
 /* ---- people who prefer less motion ---- */
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
+  .card:hover, .stat:hover, .btn:hover, .icon-btn:hover svg { transform: none !important; }
 }

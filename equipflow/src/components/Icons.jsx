@@ -67,6 +67,13 @@ export const MoonIcon = (p) => (
   </Icon>
 )
 
+export const CameraIcon = (p) => (
+  <Icon {...p}>
+    <path d="M4 8.5A1.5 1.5 0 0 1 5.5 7H8l1.2-2h5.6L16 7h2.5A1.5 1.5 0 0 1 20 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z" />
+    <circle cx="12" cy="13" r="3.4" />
+  </Icon>
+)
+
 export const MonitorIcon = (p) => (
   <Icon {...p}>
     <rect x="3" y="4" width="18" height="12" rx="2" />

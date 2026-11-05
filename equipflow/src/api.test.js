@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ApiError, api, getToken, setToken, setUnauthorizedHandler } from './api'
-import { jsonResponse, mockApi } from './test/helpers'
+import { blobResponse, jsonResponse, mockApi } from './test/helpers'
 
 describe('api requests', () => {
   it('sends the saved token and builds the query string, skipping empty values', async () => {
@@ -76,5 +76,40 @@ describe('api errors', () => {
     await expect(api.login('a', 'b')).rejects.toThrow()
     expect(handler).not.toHaveBeenCalled()
     setUnauthorizedHandler(() => {})
+  })
+})
+
+describe('profile photo calls', () => {
+  it('uploads the picture as multipart form data under the name "file"', async () => {
+    setToken('abc')
+    const fetchMock = mockApi({ 'PUT /api/me/avatar': { has_avatar: true, avatar_version: 7 } })
+    await api.uploadAvatar(new Blob(['jpeg'], { type: 'image/jpeg' }))
+
+    const [, options] = fetchMock.mock.calls[0]
+    expect(options.body).toBeInstanceOf(FormData)
+    expect(options.body.get('file').name).toBe('avatar.jpg')
+    expect(options.headers['Content-Type']).toBeUndefined() // the browser adds it, with the boundary
+    expect(options.headers.Authorization).toBe('Bearer abc')
+  })
+
+  it('downloads the photo as a Blob, asking for the current version', async () => {
+    setToken('abc')
+    const fetchMock = mockApi({ 'GET /api/me/avatar': () => blobResponse('pic') })
+    const picture = await api.avatar(7)
+
+    expect(picture).toBeInstanceOf(Blob)
+    expect(new URL(fetchMock.mock.calls[0][0]).search).toBe('?v=7')
+  })
+
+  it('still reads the error message when a picture request fails', async () => {
+    setToken('abc')
+    mockApi({ 'GET /api/me/avatar': () => jsonResponse({ detail: 'No profile photo' }, 404) })
+    await expect(api.avatar(1)).rejects.toMatchObject({ message: 'No profile photo', status: 404 })
+  })
+
+  it('deletes with DELETE', async () => {
+    const fetchMock = mockApi({ 'DELETE /api/me/avatar': { has_avatar: false } })
+    await api.deleteAvatar()
+    expect(fetchMock.mock.calls[0][1].method).toBe('DELETE')
   })
 })

@@ -26,9 +26,16 @@ export function mockApi(routes) {
   return fetchMock
 }
 
+/** A fake Response carrying a picture (what GET /api/me/avatar returns). */
+export const blobResponse = (content = 'jpeg-bytes') => ({
+  ok: true,
+  status: 200,
+  blob: async () => new Blob([content], { type: 'image/jpeg' }),
+})
+
 export const STUDENT = {
   id: 1, sr_code: '24-0001', full_name: 'Juan Dela Cruz', email: 'juan@example.com', role: 'student',
-  status: 'active', rfid_linked: true, rfid_active: true, created_at: '2026-01-01T00:00:00Z',
+  status: 'active', rfid_linked: true, rfid_active: true, has_avatar: false, avatar_version: null, created_at: '2026-01-01T00:00:00Z',
 }
 
 const HOUR = 3600 * 1000

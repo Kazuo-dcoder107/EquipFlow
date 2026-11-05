@@ -3,6 +3,7 @@ import { api } from '../api'
 import { useAuth } from '../auth'
 import { useApi } from '../hooks/useApi'
 import { firstName, peso } from '../utils/format'
+import Avatar from '../components/Avatar'
 import ErrorBox from '../components/ErrorBox'
 import ItemCard from '../components/ItemCard'
 import LoanCard from '../components/LoanCard'
@@ -24,7 +25,10 @@ export default function Home() {
 
   return (
     <>
-      <h1>Hello, {firstName(user.full_name)}</h1>
+      <div className="greeting">
+        <Avatar size="lg" />
+        <h1>Hello, {firstName(user.full_name)}</h1>
+      </div>
       <StatusNotice />
 
       {summary.error && <ErrorBox message={summary.error} onRetry={summary.reload} />}

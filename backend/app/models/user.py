@@ -1,8 +1,8 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import DateTime, Enum, String
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import DateTime, Enum, LargeBinary, String
+from sqlalchemy.orm import Mapped, deferred, mapped_column, relationship
 
 from app.database import Base
 from app.models.enums import UserRole, UserStatus
@@ -31,5 +31,10 @@ class User(Base):
     # Used for web login (students, teachers, staff and admins)
     password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    # Profile photo: a small processed JPEG (about 10-30 KB) stored right in the database.
+    # `deferred` means it is only read when asked for, so listing users never drags the
+    # picture bytes along. avatar_updated_at is NULL when the user has no photo.
+    avatar: Mapped[Optional[bytes]] = deferred(mapped_column(LargeBinary, nullable=True))
+    avatar_updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     transactions = relationship("Transaction", back_populates="user")

@@ -4,6 +4,7 @@ uvicorn
 bcrypt
 pyjwt
 python-multipart
+pillow
 email-validator
 python-dotenv
 apscheduler<4

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
@@ -73,6 +73,15 @@ class PasswordReset(BaseModel):
     _pw = field_validator("new_password")(lambda cls, v: _check_password(v))
 
 
+def _epoch(moment) -> Optional[int]:
+    """Seconds since 1970 for a stored (UTC) datetime, or None."""
+    if moment is None:
+        return None
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return int(moment.timestamp())
+
+
 class UserOut(BaseModel):
     id: int
     sr_code: str
@@ -82,6 +91,8 @@ class UserOut(BaseModel):
     status: UserStatus
     rfid_linked: bool
     rfid_active: bool
+    has_avatar: bool = False
+    avatar_version: Optional[int] = None   # changes with each new photo; used to refresh caches
     created_at: UtcDatetime
 
     @classmethod
@@ -89,7 +100,8 @@ class UserOut(BaseModel):
         return cls(id=u.id, sr_code=u.sr_code, full_name=u.full_name, email=u.email,
                    role=u.role, status=u.status,
                    rfid_linked=u.rfid_uid is not None, rfid_active=u.rfid_active,
-                   created_at=u.created_at)
+                   has_avatar=u.avatar_updated_at is not None,
+                   avatar_version=_epoch(u.avatar_updated_at), created_at=u.created_at)
 
 
 class UserListOut(BaseModel):

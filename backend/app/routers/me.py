@@ -1,7 +1,8 @@
 """The logged-in user's own records (the student's "my items and fines" page)."""
+from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
@@ -10,7 +11,9 @@ from app.models import PenaltyStatus, Transaction, User
 from app.schemas.recommendations import RecommendationsOut
 from app.schemas.records import (MySummary, PenaltyListOut, TransactionListOut, TransactionState,
                                  penalty_out, transaction_out)
+from app.schemas.users import UserOut
 from app.security import get_current_user
+from app.services.avatars import MAX_UPLOAD_BYTES, AvatarError, process_avatar
 from app.services.borrowing import _now
 from app.services.recommendations import recommend
 from app.services.records import query_penalties, query_transactions, state_clause
@@ -58,3 +61,40 @@ def my_recommendations(limit: int = Query(5, ge=1, le=20), user: User = Depends(
     """Items and books suggested from the categories and genres this user borrows most.
     Rule-based (plain counting, no AI); each suggestion says why it was picked."""
     return recommend(db, user, limit)
+
+
+# ---- profile photo (kept in the database; see services/avatars.py) ----
+
+@router.get("/avatar")
+def get_my_avatar(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """The logged-in user's photo as a JPEG. Needs the login token, so photos are not public."""
+    data = db.scalar(select(User.avatar).where(User.id == user.id))
+    if data is None:
+        raise HTTPException(status_code=404, detail="No profile photo")
+    # The site asks for ?v=<avatar_version>, so each new photo gets its own cache entry.
+    return Response(content=data, media_type="image/jpeg",
+                    headers={"Cache-Control": "private, max-age=86400"})
+
+
+@router.put("/avatar", response_model=UserOut)
+async def upload_my_avatar(file: UploadFile = File(...), user: User = Depends(get_current_user),
+                           db: Session = Depends(get_db)):
+    data = await file.read(MAX_UPLOAD_BYTES + 1)   # never read more than we allow
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="That picture is too large (2 MB at most).")
+    try:
+        user.avatar = process_avatar(data)
+    except AvatarError as err:
+        raise HTTPException(status_code=422, detail=str(err))
+    user.avatar_updated_at = datetime.now(timezone.utc)
+    db.commit()
+    return UserOut.from_user(user)
+
+
+@router.delete("/avatar", response_model=UserOut)
+def delete_my_avatar(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Back to the default picture (the first letter of the name). Safe to repeat."""
+    user.avatar = None
+    user.avatar_updated_at = None
+    db.commit()
+    return UserOut.from_user(user)

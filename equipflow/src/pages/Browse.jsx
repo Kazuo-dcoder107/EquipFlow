@@ -37,6 +37,18 @@ export default function Browse() {
     setLimit(PAGE_SIZE)
   }
 
+  // Genres belong to books only. When a hardware category (Laptop, Arduino Kit, Projector...)
+  // is chosen, the genre filter is switched off. "All categories" keeps it on.
+  const category = categories.data?.find((c) => String(c.id) === categoryId)
+  const genresApply = !category || category.type === 'book'
+
+  function onCategory(event) {
+    const chosen = categories.data?.find((c) => String(c.id) === event.target.value)
+    setCategoryId(event.target.value)
+    if (chosen && chosen.type !== 'book') setGenreId('') // forget a genre that no longer applies
+    setLimit(PAGE_SIZE)
+  }
+
   const items = results.data?.items || []
 
   return (
@@ -52,12 +64,18 @@ export default function Browse() {
           onChange={(e) => { setSearch(e.target.value); setLimit(PAGE_SIZE) }}
         />
         <div className="filter-row">
-          <select aria-label="Category" value={categoryId} onChange={onFilter(setCategoryId)}>
+          <select aria-label="Category" value={categoryId} onChange={onCategory}>
             <option value="">All categories</option>
             {categories.data?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-          <select aria-label="Genre" value={genreId} onChange={onFilter(setGenreId)}>
-            <option value="">All genres</option>
+          <select
+            aria-label="Genre"
+            value={genreId}
+            onChange={onFilter(setGenreId)}
+            disabled={!genresApply}
+            title={genresApply ? undefined : 'Genres only apply to books'}
+          >
+            <option value="">{genresApply ? 'All genres' : 'Books only'}</option>
             {genres.data?.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
           </select>
         </div>

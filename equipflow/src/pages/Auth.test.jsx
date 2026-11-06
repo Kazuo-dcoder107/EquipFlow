@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { STUDENT, jsonResponse, mockApi, renderApp } from '../test/helpers'
+import { DEPARTMENTS, STUDENT, jsonResponse, mockApi, renderApp } from '../test/helpers'
+
+// the registration request itself (the page also fetches the departments list with a GET)
+const registrations = (fetchMock) => fetchMock.mock.calls.filter(([, options]) => options?.method === 'POST')
 
 const HOME_DATA = {
   'GET /api/me/summary': { borrowed_now: 0, overdue_now: 0, unpaid_total: 0 },
@@ -63,10 +66,19 @@ describe('Register page', () => {
     // the Register password label also contains its hint text, so match by its start
     await userEvent.type(screen.getByLabelText(/^Password/), 'password123')
     await userEvent.type(screen.getByLabelText('Confirm password'), 'password123')
+    if (role === 'student') await fillAbout()
+  }
+
+  // students also give age, department, year level and program
+  async function fillAbout() {
+    await userEvent.type(await screen.findByLabelText(/^Age/), '20')
+    await userEvent.selectOptions(screen.getByLabelText(/^Department/), 'CICS')
+    await userEvent.selectOptions(screen.getByLabelText(/^Year level/), '3rd year')
+    await userEvent.selectOptions(screen.getByLabelText(/^Program/), 'Bachelor of Science in Information Technology')
   }
 
   it('warns teachers and staff about approval, but not students', async () => {
-    mockApi({})
+    mockApi({ 'GET /api/departments': DEPARTMENTS })
     renderApp('/register', { loggedIn: false })
     expect(screen.queryByText(/need an admin's approval/)).not.toBeInTheDocument()
     await userEvent.selectOptions(screen.getByLabelText('I am a'), 'staff')
@@ -75,6 +87,7 @@ describe('Register page', () => {
 
   it('sends the chosen role and explains the approval step', async () => {
     const fetchMock = mockApi({
+      'GET /api/departments': DEPARTMENTS,
       'POST /api/auth/register': () => jsonResponse({ id: 9, role: 'teacher', status: 'pending_approval' }, 201),
     })
     renderApp('/register', { loggedIn: false })
@@ -82,14 +95,14 @@ describe('Register page', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Create account' }))
 
     expect(await screen.findByRole('heading', { name: 'Request sent' })).toBeInTheDocument()
-    const sent = JSON.parse(fetchMock.mock.calls[0][1].body)
+    const sent = JSON.parse(registrations(fetchMock)[0][1].body)
     expect(sent).toEqual({
       sr_code: 'T-100', full_name: 'Tess Teacher', email: 'tess@example.com', password: 'password123', role: 'teacher',
     })
   })
 
   it('tells a student to link their ID card at the kiosk', async () => {
-    mockApi({ 'POST /api/auth/register': () => jsonResponse({ id: 9, role: 'student', status: 'pending_enrollment' }, 201) })
+    mockApi({ 'GET /api/departments': DEPARTMENTS, 'POST /api/auth/register': () => jsonResponse({ id: 9, role: 'student', status: 'pending_enrollment' }, 201) })
     renderApp('/register', { loggedIn: false })
     await fill('student')
     await userEvent.click(screen.getByRole('button', { name: 'Create account' }))
@@ -98,7 +111,7 @@ describe('Register page', () => {
   })
 
   it('catches mismatched passwords without calling the API', async () => {
-    const fetchMock = mockApi({})
+    const fetchMock = mockApi({ 'GET /api/departments': DEPARTMENTS })
     renderApp('/register', { loggedIn: false })
     await fill('student')
     await userEvent.clear(screen.getByLabelText('Confirm password'))
@@ -106,11 +119,11 @@ describe('Register page', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Create account' }))
 
     expect(screen.getByRole('alert')).toHaveTextContent('do not match')
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(registrations(fetchMock)).toHaveLength(0)
   })
 
   it('shows what the API rejected, such as a duplicate SR-code', async () => {
-    mockApi({ 'POST /api/auth/register': () => jsonResponse({ detail: 'SR-code already registered' }, 409) })
+    mockApi({ 'GET /api/departments': DEPARTMENTS, 'POST /api/auth/register': () => jsonResponse({ detail: 'SR-code already registered' }, 409) })
     renderApp('/register', { loggedIn: false })
     await fill('student')
     await userEvent.click(screen.getByRole('button', { name: 'Create account' }))

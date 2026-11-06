@@ -5,6 +5,7 @@ import { useInstallPrompt } from '../hooks/useInstallPrompt'
 import { PREFERENCES, useTheme } from '../theme'
 import { prepareAvatar } from '../utils/image'
 import { ROLE_LABELS } from '../utils/format'
+import AboutYouCard from '../components/AboutYouCard'
 import Avatar from '../components/Avatar'
 import { CameraIcon, MonitorIcon, MoonIcon, SunIcon } from '../components/Icons'
 import StatusNotice from '../components/StatusNotice'
@@ -93,6 +94,8 @@ export default function Profile() {
         />
       </section>
       {photoError && <p className="form-error" role="alert">{photoError}</p>}
+
+      <AboutYouCard />
 
       <dl className="card details">
         <dt>SR-code</dt><dd>{user.sr_code}</dd>

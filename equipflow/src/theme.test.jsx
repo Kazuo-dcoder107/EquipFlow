@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { THEME_COLORS, ThemeProvider, resolveTheme, useTheme } from './theme'
-import { STUDENT, mockApi, renderApp } from './test/helpers'
+import { DEPARTMENTS, STUDENT, mockApi, renderApp } from './test/helpers'
 
 const root = document.documentElement
 const metaColor = () => document.querySelector('meta[name="theme-color"]').getAttribute('content')
@@ -123,6 +123,7 @@ describe('ThemeProvider', () => {
 describe('theme controls in the app', () => {
   const home = {
     'GET /api/auth/me': STUDENT,
+    'GET /api/departments': DEPARTMENTS,
     'GET /api/me/summary': { borrowed_now: 0, overdue_now: 0, unpaid_total: 0 },
     'GET /api/me/transactions': { total: 0, items: [] },
     'GET /api/me/recommendations': { strategy: 'popular', borrowing_blocked: null, top_categories: [], top_genres: [], items: [] },

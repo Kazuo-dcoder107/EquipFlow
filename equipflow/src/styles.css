@@ -365,6 +365,10 @@ a { color: var(--accent); }
 .form label { display: flex; flex-direction: column; gap: 0.3rem; font-weight: 600; font-size: 0.9rem; }
 .form .hint { font-weight: 400; font-size: 0.8rem; color: var(--muted); }
 .form-error { color: var(--danger); margin: 0; font-size: 0.9rem; }
+.form-section { margin: 0.6rem 0 0; padding-top: 0.9rem; border-top: 1px solid var(--border); font-size: 0.95rem; }
+.req { color: var(--danger); }
+.selected-full { font-weight: 400; font-size: 0.85rem; color: var(--muted); }
+.saved { margin: 0; color: var(--ok); font-weight: 650; font-size: 0.9rem; }
 
 input, select {
   width: 100%;
@@ -376,6 +380,7 @@ input, select {
   font: inherit;
 }
 input::placeholder { color: var(--muted); }
+select:disabled, input:disabled { background: var(--surface-2); color: var(--muted); cursor: not-allowed; opacity: 0.75; }
 input:focus-visible, select:focus-visible, .btn:focus-visible, .tab:focus-visible,
 .icon-btn:focus-visible, .avatar-link:focus-visible, .tabs button:focus-visible {
   outline: 2px solid var(--accent);

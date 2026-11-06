@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { STUDENT, hoursFromNow, jsonResponse, loan, mockApi, renderApp } from '../test/helpers'
+import { DEPARTMENTS, STUDENT, hoursFromNow, jsonResponse, loan, mockApi, renderApp } from '../test/helpers'
 
-const ME = { 'GET /api/auth/me': STUDENT }
+const ME = { 'GET /api/auth/me': STUDENT, 'GET /api/departments': DEPARTMENTS }
 const queryOf = (call) => Object.fromEntries(new URL(call[0]).searchParams)
 const callsTo = (fetchMock, path) => fetchMock.mock.calls.filter((c) => new URL(c[0]).pathname === path)
 
@@ -195,7 +195,7 @@ describe('Browse', () => {
   function setup(total = 3) {
     return mockApi({
       ...ME,
-      'GET /api/categories': [{ id: 1, name: 'Book' }, { id: 2, name: 'Laptop' }],
+      'GET /api/categories': [{ id: 1, name: 'Book', type: 'book' }, { id: 2, name: 'Laptop', type: 'hardware' }],
       'GET /api/genres': [{ id: 7, name: 'Science Fiction', book_count: 2 }],
       'GET /api/equipment': () => jsonResponse({ total, items: [item(1, 'Dune', { genre: 'Science Fiction' }), item(2, 'Laptop 01', { status: 'borrowed' })] }),
     })
@@ -237,6 +237,62 @@ describe('Browse', () => {
 
     await userEvent.click(screen.getByLabelText('Available only'))
     await waitFor(() => expect(queryOf(callsTo(fetchMock, '/api/equipment').at(-1)).limit).toBe('20'))
+  })
+
+  describe('genre filter', () => {
+    const genreFilter = () => screen.getByLabelText('Genre')
+
+    it('switches off for a hardware category and back on for books or all categories', async () => {
+      setup()
+      renderApp('/browse')
+      await screen.findByText('Dune')
+      expect(genreFilter()).toBeEnabled()
+
+      await userEvent.selectOptions(screen.getByLabelText('Category'), 'Laptop')
+      expect(genreFilter()).toBeDisabled()
+      expect(within(genreFilter()).getByRole('option', { name: 'Books only' })).toBeInTheDocument()
+      expect(genreFilter()).toHaveAttribute('title', 'Genres only apply to books')
+
+      await userEvent.selectOptions(screen.getByLabelText('Category'), 'Book')
+      expect(genreFilter()).toBeEnabled()
+      await userEvent.selectOptions(screen.getByLabelText('Category'), 'Laptop')
+      await userEvent.selectOptions(screen.getByLabelText('Category'), '')
+      expect(genreFilter()).toBeEnabled()
+    })
+
+    it('forgets a chosen genre when a hardware category is picked, so it cannot hide every result', async () => {
+      const fetchMock = setup()
+      renderApp('/browse')
+      await screen.findByText('Dune')
+      await userEvent.selectOptions(genreFilter(), 'Science Fiction')
+      await waitFor(() => expect(queryOf(callsTo(fetchMock, '/api/equipment').at(-1))).toMatchObject({ genre_id: '7' }))
+
+      await userEvent.selectOptions(screen.getByLabelText('Category'), 'Laptop')
+      await waitFor(() => expect(queryOf(callsTo(fetchMock, '/api/equipment').at(-1))).toMatchObject({ category_id: '2' }))
+      expect(queryOf(callsTo(fetchMock, '/api/equipment').at(-1))).not.toHaveProperty('genre_id')
+
+      await userEvent.selectOptions(screen.getByLabelText('Category'), 'Book')
+      expect(genreFilter()).toHaveValue('') // it stays cleared; nothing quietly comes back
+    })
+
+    it('goes by the category type, so Arduino Kit, Projector and any new hardware category all switch it off', async () => {
+      mockApi({
+        ...ME,
+        'GET /api/categories': [
+          { id: 1, name: 'Book', type: 'book' }, { id: 2, name: 'Arduino Kit', type: 'hardware' },
+          { id: 3, name: 'Laptop', type: 'hardware' }, { id: 4, name: 'Projector', type: 'hardware' },
+          { id: 5, name: 'Drone Kit', type: 'hardware' }, { id: 6, name: 'Textbook', type: 'book' },
+        ],
+        'GET /api/genres': [{ id: 7, name: 'Science Fiction', book_count: 2 }],
+        'GET /api/equipment': { total: 0, items: [] },
+      })
+      renderApp('/browse')
+      await screen.findByText('Nothing found')
+      for (const [name, isHardware] of [['Arduino Kit', true], ['Laptop', true], ['Projector', true], ['Drone Kit', true], ['Book', false], ['Textbook', false]]) {
+        await userEvent.selectOptions(screen.getByLabelText('Category'), name)
+        if (isHardware) expect(genreFilter()).toBeDisabled(); else expect(genreFilter()).toBeEnabled()
+      }
+    })
   })
 
   it('has an empty state', async () => {

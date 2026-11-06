@@ -6,7 +6,7 @@
 //
 // Skipped in a normal `npm test`, because it needs the backend and the demo data.
 import { describe, expect, it } from 'vitest'
-import { configure, screen, within } from '@testing-library/react'
+import { cleanup, configure, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderApp } from './helpers'
 
@@ -117,6 +117,15 @@ describe.skipIf(!process.env.EQUIPFLOW_E2E)('against the real backend', () => {
     expect(await screen.findByText('Waiting for approval')).toBeInTheDocument()
   })
 
+  const BSIT = 'Bachelor of Science in Information Technology'
+
+  async function fillStudentDetails(age = '19') {
+    await userEvent.type(await screen.findByLabelText(/^Age/), age)
+    await userEvent.selectOptions(screen.getByLabelText(/^Department/), 'CICS')
+    await userEvent.selectOptions(screen.getByLabelText(/^Year level/), '1st year')
+    await userEvent.selectOptions(screen.getByLabelText(/^Program/), BSIT)
+  }
+
   it('duplicate registrations show the API message', async () => {
     renderApp('/register', { loggedIn: false })
     await userEvent.type(screen.getByLabelText('SR-code'), '24-0001')
@@ -124,7 +133,73 @@ describe.skipIf(!process.env.EQUIPFLOW_E2E)('against the real backend', () => {
     await userEvent.type(screen.getByLabelText('Email'), 'copy@example.com')
     await userEvent.type(screen.getByLabelText(/^Password/), 'password123')
     await userEvent.type(screen.getByLabelText('Confirm password'), 'password123')
+    await fillStudentDetails()
     await userEvent.click(screen.getByRole('button', { name: 'Create account' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('SR-code already registered')
+  })
+
+  it('a new student registers with all four details, and they are saved', async () => {
+    const code = `24-${Date.now()}`
+    renderApp('/register', { loggedIn: false })
+    await userEvent.type(screen.getByLabelText('SR-code'), code)
+    await userEvent.type(screen.getByLabelText('Full name'), 'Nina Newstudent')
+    await userEvent.type(screen.getByLabelText('Email'), `${code}@example.com`)
+    await userEvent.type(screen.getByLabelText(/^Password/), 'password123')
+    await userEvent.type(screen.getByLabelText('Confirm password'), 'password123')
+    await fillStudentDetails('18')
+    await userEvent.click(screen.getByRole('button', { name: 'Create account' }))
+    expect(await screen.findByRole('heading', { name: 'Account created' })).toBeInTheDocument()
+
+    cleanup()   // start a new visit: sign in as the new student and look at the saved details
+    await signIn(code)
+    await screen.findByRole('heading', { name: 'Hello, Nina' })
+    expect(screen.queryByText('Complete your profile')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('link', { name: 'Profile of Nina' }))
+    expect(await screen.findByLabelText(/^Age/)).toHaveValue(18)
+    expect(screen.getByLabelText(/^Department/)).toHaveDisplayValue('CICS')
+    expect(screen.getByLabelText(/^Year level/)).toHaveDisplayValue('1st year')
+    expect(screen.getByLabelText(/^Program/)).toHaveDisplayValue(BSIT)
+  })
+
+  it('Juan sees his saved details, changes his year level, and it is still changed on the next visit', async () => {
+    await signIn('24-0001')
+    await userEvent.click(await screen.findByRole('link', { name: 'Profile of Juan' }))
+    expect(await screen.findByLabelText(/^Year level/)).toHaveDisplayValue('3rd year')
+    expect(screen.getByLabelText(/^Program/)).toHaveDisplayValue(BSIT)
+
+    await userEvent.selectOptions(screen.getByLabelText(/^Year level/), '4th year')
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('Saved')
+
+    cleanup()
+    localStorage.clear()   // a new visit: the saved login is gone, so sign in again
+    await signIn('24-0001')
+    await userEvent.click(await screen.findByRole('link', { name: 'Profile of Juan' }))
+    expect(await screen.findByLabelText(/^Year level/)).toHaveDisplayValue('4th year')
+
+    await userEvent.selectOptions(screen.getByLabelText(/^Year level/), '3rd year')   // put it back for the next run
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('Saved')
+  })
+
+  it('a teacher is asked only for age and department', async () => {
+    await signIn('T-001')
+    await userEvent.click(await screen.findByRole('link', { name: 'Profile of Tess' }))
+    expect(await screen.findByLabelText(/^Age/)).toHaveValue(41)
+    expect(screen.getByLabelText(/^Department/)).toHaveDisplayValue('CICS')
+    expect(screen.queryByLabelText(/^Year level/)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/^Program/)).not.toBeInTheDocument()
+  })
+
+  it('Browse switches the genre filter off for the real hardware categories', async () => {
+    await signIn('24-0002')
+    await userEvent.click(await screen.findByRole('link', { name: /Browse/ }))
+    await screen.findByText('Dune')
+    for (const hardware of ['Arduino Kit', 'Laptop', 'Projector']) {
+      await userEvent.selectOptions(screen.getByLabelText('Category'), hardware)
+      expect(screen.getByLabelText('Genre')).toBeDisabled()
+    }
+    await userEvent.selectOptions(screen.getByLabelText('Category'), 'Book')
+    expect(screen.getByLabelText('Genre')).toBeEnabled()
   })
 })

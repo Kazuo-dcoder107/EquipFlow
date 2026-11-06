@@ -1,6 +1,11 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
+import { useApi } from '../hooks/useApi'
+import { emptyProfileValues, studentDepartments, toProfilePayload } from '../utils/profile'
+import AboutFields from '../components/AboutFields'
+import ErrorBox from '../components/ErrorBox'
+import Loading from '../components/Loading'
 
 const ROLES = [
   { value: 'student', label: 'Student' },
@@ -12,12 +17,18 @@ export default function Register() {
   const [form, setForm] = useState({
     sr_code: '', full_name: '', email: '', password: '', confirm: '', role: 'student',
   })
+  const [about, setAbout] = useState(emptyProfileValues()) // age, department, year level, program
+  const departments = useApi(() => api.departments(), [])
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [created, setCreated] = useState(null) // the account the API created, once it exists
 
   // One small function updates any field: update('email')(event)
   const update = (field) => (event) => setForm({ ...form, [field]: event.target.value })
+
+  const isStudent = form.role === 'student'
+  // Students cannot register until the school's departments and programs have loaded
+  const noPrograms = isStudent && departments.data && studentDepartments(departments.data).length === 0
 
   async function handleSubmit(event) {
     event.preventDefault()
@@ -29,7 +40,9 @@ export default function Register() {
     setBusy(true)
     try {
       const { confirm, ...fields } = form // everything except the confirm box
-      setCreated(await api.register({ ...fields, sr_code: form.sr_code.trim(), full_name: form.full_name.trim() }))
+      // students send age, department, year level and program too; teachers and staff do not
+      const extra = isStudent ? toProfilePayload(about, 'student') : {}
+      setCreated(await api.register({ ...fields, ...extra, sr_code: form.sr_code.trim(), full_name: form.full_name.trim() }))
     } catch (err) {
       setError(err.message)
     } finally {
@@ -100,9 +113,30 @@ export default function Register() {
           <input type="password" value={form.confirm} onChange={update('confirm')} autoComplete="new-password" required />
         </label>
 
+        {isStudent && (
+          <>
+            <h3 className="form-section">About you</h3>
+            {departments.loading && <Loading text="Loading departments..." count={1} />}
+            {departments.error && <ErrorBox message={departments.error} onRetry={departments.reload} />}
+            {noPrograms && (
+              <p className="notice notice-warning small">
+                Student sign-up is not open yet: an admin still has to add the programs.
+              </p>
+            )}
+            {departments.data && !noPrograms && (
+              <AboutFields
+                role="student"
+                values={about}
+                onChange={(patch) => setAbout({ ...about, ...patch })}
+                departments={departments.data}
+              />
+            )}
+          </>
+        )}
+
         {error && <p className="form-error" role="alert">{error}</p>}
 
-        <button className="btn btn-primary" disabled={busy}>
+        <button className="btn btn-primary" disabled={busy || (isStudent && !departments.data) || noPrograms}>
           {busy ? 'Creating...' : 'Create account'}
         </button>
       </form>

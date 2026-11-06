@@ -111,6 +111,11 @@ export const api = {
   deleteAvatar: () => request('/api/me/avatar', { method: 'DELETE' }),
   avatar: (version) => request('/api/me/avatar', { params: { v: version }, blob: true }),
 
+  // school structure: the departments and their programs (public, the sign-up form needs it)
+  departments: () => request('/api/departments', { auth: false }),
+  // age, department, and (students only) year level and program
+  updateProfile: (fields) => request('/api/me/profile', { method: 'PUT', json: fields }),
+
   equipment: (params) => request('/api/equipment', { params }),
   categories: () => request('/api/categories'),
   genres: () => request('/api/genres'),

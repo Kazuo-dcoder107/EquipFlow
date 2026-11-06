@@ -56,6 +56,7 @@ Read in this order; each file builds on the one before.
 | `src/pages/Browse.jsx` | Filters, debounced search (`hooks/useDebounce.js`), "show more" paging |
 | `src/components/*Card.jsx`, `FineTicket.jsx` | Small presentational components that only receive props |
 | `src/components/Avatar.jsx`, `hooks/useAvatar.js`, `utils/image.js` | The profile picture: letter fallback, downloading with the login token, resizing before upload |
+| `src/components/AboutFields.jsx`, `AboutYouCard.jsx`, `utils/profile.js` | **Shared form pieces**: the age / department / year level / program fields used by both Register and Profile |
 | `src/theme.jsx` | **Context again**: the light/dark preference, saved on the device and applied to `<html data-theme>` |
 | `src/utils/format.js` | Plain functions (dates, "due in 2 days", pesos), easy to test |
 | `src/*.test.*`, `src/pages/*.test.jsx` | How each part is tested; `src/test/helpers.jsx` fakes the API |
@@ -65,10 +66,25 @@ The flow for any screen is the same: **page** calls `useApi(() => api.something(
 
 ## Screens
 
-Sign in, Register (students, teachers and staff pick their role; teacher and staff accounts wait for
-an admin's approval), Home, My loans (current and history, with days left), Fines (tickets with a QR
+Sign in, Register (students, teachers and staff pick their role; students also give age, department,
+year level and program; teacher and staff accounts wait for an admin's approval), Home, My loans (current and history, with days left), Fines (tickets with a QR
 reference for the counter), For you (recommendations with the reason for each), Browse (search,
-category, genre, available only) and Profile (photo, account, ID card status, appearance, install, sign out).
+category, genre, available only; the genre filter switches off for hardware categories) and Profile (photo, account, ID card status, appearance, install, sign out).
+
+## About you: age, department, year level, program
+
+Profile -> **About you**. Everyone can give an **age** and a **department** (CICS, CAFAD, CET, COE, General
+Service). **Students must also give a year level and a program, and all four are required**: they are asked
+when signing up and can be changed on the Profile page. Teachers and staff are never asked for year level or
+program, and for them age and department are optional. A student who has not filled them in (for example an
+account made before this existed) sees a "Complete your profile" notice.
+
+- Programs belong to a department and come from a list that admins manage in the API (so everyone picks the
+  same spelling). Students can only choose a department that has programs, so General Service is for staff.
+- The program dropdown can cut a long name on a small screen, so the full name is written under it.
+- The rules are enforced by the API too; the site just guides people to valid answers.
+- Genres belong to books only, so on Browse the genre filter is greyed out ("Books only") whenever a hardware
+  category (Laptop, Arduino Kit, Projector, or any other hardware category) is chosen.
 
 ## Profile photo
 

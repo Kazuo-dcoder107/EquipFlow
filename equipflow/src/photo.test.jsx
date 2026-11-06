@@ -5,7 +5,7 @@ import Avatar from './components/Avatar'
 import { AuthProvider } from './auth'
 import { clearAvatarCache } from './hooks/useAvatar'
 import { ThemeProvider } from './theme'
-import { STUDENT, blobResponse, jsonResponse, mockApi, renderApp } from './test/helpers'
+import { DEPARTMENTS, STUDENT, blobResponse, jsonResponse, mockApi, renderApp } from './test/helpers'
 
 // The real image resizing needs a browser canvas; here it is replaced by a fake that returns a tiny file.
 vi.mock('./utils/image', async (original) => ({
@@ -141,6 +141,7 @@ describe('Profile photo', () => {
     let user = startsWithPhoto ? withPhoto : STUDENT
     return mockApi({
       'GET /api/auth/me': () => jsonResponse(user),
+      'GET /api/departments': DEPARTMENTS,
       'GET /api/me/avatar': () => blobResponse(),
       'PUT /api/me/avatar': putResponse || (() => { user = { ...withPhoto, avatar_version: 200 }; return jsonResponse(user) }),
       'DELETE /api/me/avatar': () => { user = STUDENT; return jsonResponse(user) },

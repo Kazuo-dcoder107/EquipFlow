@@ -33,9 +33,21 @@ export const blobResponse = (content = 'jpeg-bytes') => ({
   blob: async () => new Blob([content], { type: 'image/jpeg' }),
 })
 
+/** The school's departments and programs, as GET /api/departments returns them (CET and
+ * General Service have no programs, so students cannot choose them). */
+export const DEPARTMENTS = [
+  { id: 1, name: 'CICS', programs: [{ id: 1, name: 'Bachelor of Science in Information Technology' }, { id: 2, name: 'Bachelor of Science in Computer Science' }] },
+  { id: 2, name: 'CAFAD', programs: [{ id: 3, name: 'Bachelor of Science in Architecture' }] },
+  { id: 3, name: 'CET', programs: [] },
+  { id: 4, name: 'COE', programs: [{ id: 4, name: 'Bachelor of Science in Civil Engineering' }] },
+  { id: 5, name: 'General Service', programs: [] },
+]
+
 export const STUDENT = {
   id: 1, sr_code: '24-0001', full_name: 'Juan Dela Cruz', email: 'juan@example.com', role: 'student',
-  status: 'active', rfid_linked: true, rfid_active: true, has_avatar: false, avatar_version: null, created_at: '2026-01-01T00:00:00Z',
+  status: 'active', rfid_linked: true, rfid_active: true, has_avatar: false, avatar_version: null,
+  age: 20, department_id: 1, department: 'CICS', year_level: 3, program_id: 1,
+  program: 'Bachelor of Science in Information Technology', profile_complete: true, created_at: '2026-01-01T00:00:00Z',
 }
 
 const HOUR = 3600 * 1000

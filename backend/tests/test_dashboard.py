@@ -4,6 +4,7 @@ import pytest
 
 from app.main import app
 from app.models import *  # noqa: F401,F403
+from tests.school import STUDENT_PROFILE
 from tests.test_records import Env
 
 
@@ -28,7 +29,7 @@ def test_dashboard_is_admin_only(e):
 def test_dashboard_counts_follow_the_borrowing_flow(e):
     c = e.c
     c.post("/api/auth/register", json={"sr_code": "24-0003", "full_name": "New Kid",
-                                       "email": "n@x.com", "password": "password123"})
+                                       "email": "n@x.com", "password": "password123", **STUDENT_PROFILE})
     s = stats(e)
     assert s["equipment"] == {"total": 4, "available": 4, "borrowed": 0, "overdue": 0, "missing": 0}
     assert s["users"] == {"students": 3, "enrolled": 2, "pending_enrollment": 1,

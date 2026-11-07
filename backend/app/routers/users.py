@@ -5,7 +5,7 @@ import logging
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy import func, or_, select, update
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
 from app.models import ActivityLog, Transaction, User, UserRole, UserStatus
@@ -25,7 +25,9 @@ def _get_or_404(db: Session, user_id: int) -> User:
 
 @router.get("", response_model=UserListOut)
 def list_users(search: Optional[str] = None, status: Optional[UserStatus] = None,
-               role: Optional[UserRole] = None, limit: int = Query(50, ge=1, le=200),
+               role: Optional[UserRole] = None, department_id: Optional[int] = None,
+               program_id: Optional[int] = None, year_level: Optional[int] = None,
+               limit: int = Query(50, ge=1, le=200),
                offset: int = Query(0, ge=0), db: Session = Depends(get_db)):
     q = select(User)
     if search and search.strip():
@@ -36,8 +38,15 @@ def list_users(search: Optional[str] = None, status: Optional[UserStatus] = None
         q = q.where(User.status == status)
     if role:
         q = q.where(User.role == role)
+    if department_id is not None:
+        q = q.where(User.department_id == department_id)
+    if program_id is not None:
+        q = q.where(User.program_id == program_id)
+    if year_level is not None:
+        q = q.where(User.year_level == year_level)
     total = db.scalar(select(func.count()).select_from(q.subquery()))
-    rows = db.scalars(q.order_by(User.created_at.desc(), User.id.desc())
+    rows = db.scalars(q.options(selectinload(User.department), selectinload(User.program))
+                      .order_by(User.created_at.desc(), User.id.desc())
                       .limit(limit).offset(offset)).all()
     return UserListOut(total=total, items=[UserOut.from_user(u) for u in rows])
 

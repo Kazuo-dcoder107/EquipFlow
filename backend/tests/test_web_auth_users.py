@@ -8,9 +8,10 @@ from app.database import Base, get_db
 from app.main import app
 from app.models import *  # noqa: F401,F403
 from app.security import hash_password
+from tests.school import STUDENT_PROFILE, seed_school
 
 REG = {"sr_code": "24-0001", "full_name": "Juan Cruz", "email": "Juan@Example.com",
-       "password": "secret123"}
+       "password": "secret123", **STUDENT_PROFILE}
 
 
 @pytest.fixture
@@ -19,6 +20,7 @@ def env():
                            poolclass=StaticPool)
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine, autoflush=False)
+    seed_school(Session)
     with Session() as s:
         s.add(User(sr_code="admin", full_name="Admin", email="admin@x", role=UserRole.admin,
                    status=UserStatus.active, password_hash=hash_password("adminpass1")))

@@ -4,7 +4,7 @@
 
 Creates (password for every account: password123):
   admin                 admin account for the admin site
-  24-0001 Juan          student with history, a current loan, an overdue book and an unpaid fine
+  24-0001 Juan          CICS student (3rd year BSIT) with history, a current loan, an overdue book and an unpaid fine
   24-0002 Maria         student with a few returned books
   T-001   Tess          teacher (active)
   T-002   Tomas         teacher waiting for admin approval
@@ -18,10 +18,11 @@ from sqlalchemy import func, select
 
 import app.models  # noqa: F401
 from app.database import Base, SessionLocal, engine
-from app.models import (Category, CategoryType, Equipment, EquipmentStatus, Genre, Penalty,
-                        PenaltyStatus, PenaltyType, Transaction, TransactionStatus, User, UserRole,
+from app.models import (Category, CategoryType, Department, Equipment, EquipmentStatus, Genre, Penalty,
+                        PenaltyStatus, PenaltyType, Program, Transaction, TransactionStatus, User, UserRole,
                         UserStatus)
 from app.security import hash_password
+from app.services.profile import bootstrap_school_structure
 from app.services.borrowing import _now
 
 PASSWORD = "password123"
@@ -42,8 +43,15 @@ def main() -> None:
     with SessionLocal() as db:
         if db.scalar(select(func.count()).select_from(User)):
             raise SystemExit("The database already has users; the demo data is only for an empty one.")
+        bootstrap_school_structure(db)   # departments and the starter programs
         pw = hash_password(PASSWORD)
         now = _now()
+
+        def about(department, program, year, age):
+            """The department/program/year/age details of a demo person."""
+            dept = db.scalar(select(Department).where(Department.name == department))
+            prog = db.scalar(select(Program).where(Program.department_id == dept.id, Program.name == program)) if program else None
+            return dict(department_id=dept.id, program_id=prog.id if prog else None, year_level=year, age=age)
 
         book = Category(name="Book", type=CategoryType.book, loan_days=7, fine_per_day=5)
         laptop = Category(name="Laptop", type=CategoryType.hardware, loan_days=2, fine_per_day=25)
@@ -58,13 +66,16 @@ def main() -> None:
             return u
 
         user("admin", "Demo Admin", "admin@example.com", role=UserRole.admin, status=UserStatus.active)
-        juan = user("24-0001", "Juan Dela Cruz", "juan@example.com", rfid_uid="0A000001", status=UserStatus.active)
-        maria = user("24-0002", "Maria Santos", "maria@example.com", rfid_uid="0A000002", status=UserStatus.active)
+        juan = user("24-0001", "Juan Dela Cruz", "juan@example.com", rfid_uid="0A000001", status=UserStatus.active,
+                    **about("CICS", "Bachelor of Science in Information Technology", 3, 20))
+        maria = user("24-0002", "Maria Santos", "maria@example.com", rfid_uid="0A000002", status=UserStatus.active,
+                     **about("COE", "Bachelor of Science in Computer Engineering", 2, 19))
         user("T-001", "Tess Teacher", "tess@example.com", role=UserRole.teacher, rfid_uid="0A000003",
-             status=UserStatus.active)
+             status=UserStatus.active, **about("CICS", None, None, 41))
         user("T-002", "Tomas Torres", "tomas@example.com", role=UserRole.teacher,
              status=UserStatus.pending_approval)
-        user("24-0003", "Nico Reyes", "nico@example.com", status=UserStatus.pending_enrollment)
+        user("24-0003", "Nico Reyes", "nico@example.com", status=UserStatus.pending_enrollment,
+             **about("CICS", "Bachelor of Science in Computer Science", 1, 18))
 
         items, n = {}, 0
         for genre, titles in BOOKS.items():

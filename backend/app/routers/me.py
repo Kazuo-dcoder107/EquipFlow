@@ -11,9 +11,10 @@ from app.models import PenaltyStatus, Transaction, User
 from app.schemas.recommendations import RecommendationsOut
 from app.schemas.records import (MySummary, PenaltyListOut, TransactionListOut, TransactionState,
                                  penalty_out, transaction_out)
-from app.schemas.users import UserOut
+from app.schemas.users import ProfileIn, UserOut
 from app.security import get_current_user
 from app.services.avatars import MAX_UPLOAD_BYTES, AvatarError, process_avatar
+from app.services.profile import validate_profile
 from app.services.borrowing import _now
 from app.services.recommendations import recommend
 from app.services.records import query_penalties, query_transactions, state_clause
@@ -96,5 +97,19 @@ def delete_my_avatar(user: User = Depends(get_current_user), db: Session = Depen
     """Back to the default picture (the first letter of the name). Safe to repeat."""
     user.avatar = None
     user.avatar_updated_at = None
+    db.commit()
+    return UserOut.from_user(user)
+
+
+# ---- the "about you" details: age, department, and (students only) year level and program ----
+
+@router.put("/profile", response_model=UserOut)
+def update_my_profile(body: ProfileIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Save age, department, year level and program. Students must give all four; teachers and
+    staff may give age and department only (see services/profile.py)."""
+    clean = validate_profile(db, user.role, age=body.age, department_id=body.department_id,
+                             year_level=body.year_level, program_id=body.program_id)
+    user.age, user.department_id = clean["age"], clean["department_id"]
+    user.year_level, user.program_id = clean["year_level"], clean["program_id"]
     db.commit()
     return UserOut.from_user(user)

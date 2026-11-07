@@ -13,6 +13,7 @@ from app.models import *  # noqa: F401,F403
 from app.security import hash_password
 from app.services import sessions
 from app.services.borrowing import _now
+from tests.school import STUDENT_PROFILE, seed_school
 
 K = {"X-API-Key": "testkey"}
 
@@ -23,6 +24,7 @@ class Env:
                                poolclass=StaticPool)
         Base.metadata.create_all(engine)
         self.Session = sessionmaker(bind=engine, autoflush=False)
+        seed_school(self.Session)
         with self.Session() as s:
             book = Category(name="Book", type=CategoryType.book, loan_days=3, fine_per_day=5)
             hw = Category(name="Laptop", type=CategoryType.hardware, loan_days=2, fine_per_day=25)
@@ -210,6 +212,8 @@ def register(e, sr, role=None):
     body = {"sr_code": sr, "full_name": "New Person", "email": f"{sr.lower()}@example.com", "password": "password123"}
     if role:
         body["role"] = role
+    if role in (None, "student"):
+        body.update(STUDENT_PROFILE)   # students must give age, department, year level and program
     return e.c.post("/api/auth/register", json=body)
 
 

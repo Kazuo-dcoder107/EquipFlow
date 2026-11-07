@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User, UserRole, UserStatus
 from app.schemas.users import RegisterIn, TokenOut, UserOut
+from app.services.profile import validate_profile
 from app.security import create_access_token, get_current_user, hash_password, verify_password
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -44,14 +45,18 @@ def admin_login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depen
 
 @router.post("/register", response_model=UserOut, status_code=201)
 def register(body: RegisterIn, db: Session = Depends(get_db)):
-    """Public registration (student, teacher or staff). Students wait for their ID tag
-    to be linked at the kiosk; teachers and staff first need an admin's approval."""
+    """Public registration (student, teacher or staff). Students also give age, department,
+    year level and program. They then wait for their ID tag to be linked at the kiosk; teachers
+    and staff first need an admin's approval."""
     if db.scalar(select(User.id).where(User.sr_code == body.sr_code)):
         raise HTTPException(status_code=409, detail="SR-code already registered")
     if db.scalar(select(User.id).where(User.email == body.email)):
         raise HTTPException(status_code=409, detail="Email already registered")
+    # students must give age, department, year level and program; teachers/staff only age and department
+    about = validate_profile(db, body.role, age=body.age, department_id=body.department_id,
+                             year_level=body.year_level, program_id=body.program_id)
     user = User(sr_code=body.sr_code, full_name=body.full_name, email=body.email,
-                role=body.role,
+                role=body.role, **about,
                 status=(UserStatus.pending_approval if body.role != UserRole.student
                         else UserStatus.pending_enrollment),
                 password_hash=hash_password(body.password))

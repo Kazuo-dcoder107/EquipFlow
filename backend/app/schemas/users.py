@@ -5,6 +5,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.models import User, UserRole, UserStatus
 from app.schemas.common import UtcDatetime
+from app.services.profile import profile_complete
 
 
 def _clean(value: str, field: str, max_len: int) -> str:
@@ -28,6 +29,11 @@ class RegisterIn(BaseModel):
     email: EmailStr
     password: str
     role: UserRole = UserRole.student   # teachers/staff are held until an admin approves
+    # Students must send all four of these; teachers and staff may send age and department
+    age: Optional[int] = None
+    department_id: Optional[int] = None
+    year_level: Optional[int] = None
+    program_id: Optional[int] = None
 
     _sr = field_validator("sr_code")(lambda cls, v: _clean(v, "SR-code", 20))
     _name = field_validator("full_name")(lambda cls, v: _clean(v, "Name", 120))
@@ -50,6 +56,15 @@ class RejectIn(BaseModel):
     def _reason(cls, v):
         v = v.strip() if v else None
         return v or None
+
+
+class ProfileIn(BaseModel):
+    """What the person sends from the Profile page. The whole set is sent every time, so
+    leaving something out means clearing it (the rules in services/profile.py still apply)."""
+    age: Optional[int] = None
+    department_id: Optional[int] = None
+    year_level: Optional[int] = None
+    program_id: Optional[int] = None
 
 
 class UserUpdate(BaseModel):
@@ -93,6 +108,13 @@ class UserOut(BaseModel):
     rfid_active: bool
     has_avatar: bool = False
     avatar_version: Optional[int] = None   # changes with each new photo; used to refresh caches
+    age: Optional[int] = None
+    department_id: Optional[int] = None
+    department: Optional[str] = None
+    year_level: Optional[int] = None
+    program_id: Optional[int] = None
+    program: Optional[str] = None
+    profile_complete: bool = True   # False for a student who has not filled in all four details
     created_at: UtcDatetime
 
     @classmethod
@@ -101,7 +123,12 @@ class UserOut(BaseModel):
                    role=u.role, status=u.status,
                    rfid_linked=u.rfid_uid is not None, rfid_active=u.rfid_active,
                    has_avatar=u.avatar_updated_at is not None,
-                   avatar_version=_epoch(u.avatar_updated_at), created_at=u.created_at)
+                   avatar_version=_epoch(u.avatar_updated_at),
+                   age=u.age, department_id=u.department_id,
+                   department=u.department.name if u.department else None,
+                   year_level=u.year_level, program_id=u.program_id,
+                   program=u.program.name if u.program else None,
+                   profile_complete=profile_complete(u), created_at=u.created_at)
 
 
 class UserListOut(BaseModel):

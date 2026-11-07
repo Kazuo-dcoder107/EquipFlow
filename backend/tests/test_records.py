@@ -10,6 +10,7 @@ from app.database import Base, get_db
 from app.main import app
 from app.models import *  # noqa: F401,F403
 from app.security import hash_password
+from tests.school import seed_school
 from app.services.borrowing import _now
 
 KIOSK = {"X-API-Key": "testkey"}
@@ -21,6 +22,7 @@ class Env:
                                poolclass=StaticPool)
         Base.metadata.create_all(engine)
         self.Session = sessionmaker(bind=engine, autoflush=False)
+        seed_school(self.Session)
         with self.Session() as s:
             s.add_all([
                 User(sr_code="admin", full_name="Admin", email="admin@x", role=UserRole.admin,

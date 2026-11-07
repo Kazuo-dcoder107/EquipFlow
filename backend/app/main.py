@@ -6,11 +6,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 import app.models  # noqa: F401  (registers the tables)
 from app.config import CORS_ORIGINS, DEFAULT_SECRET_KEY, SCHEDULER_ENABLED, SECRET_KEY
-from app.database import Base, engine
+from app.database import Base, SessionLocal, engine
 from app.scheduler import build_scheduler
 from app.services.notifications import email_enabled
+from app.services.profile import bootstrap_school_structure
 from app.routers import (auth, categories, dashboard, equipment, genres, incidents, kiosk, me,
-                         notifications, penalties, reports, transactions, users)
+                         notifications, penalties, reports, school, transactions, users)
 
 
 @asynccontextmanager
@@ -21,6 +22,9 @@ async def lifespan(_: FastAPI):
             "Run: python -m scripts.init_env")
     Base.metadata.create_all(engine)
     log = logging.getLogger("uvicorn.error")
+    with SessionLocal() as db:
+        if bootstrap_school_structure(db):   # first start of an empty database only
+            log.info("Created the departments and a starter list of programs (edit them as an admin).")
     if not email_enabled():
         log.warning("Email is not configured (SMTP_USER / SMTP_PASSWORD) - reminders will not be sent.")
     scheduler = build_scheduler() if SCHEDULER_ENABLED else None
@@ -41,6 +45,7 @@ app.include_router(users.router)
 app.include_router(categories.router)
 app.include_router(equipment.router)
 app.include_router(genres.router)
+app.include_router(school.router)
 app.include_router(transactions.router)
 app.include_router(penalties.router)
 app.include_router(incidents.router)

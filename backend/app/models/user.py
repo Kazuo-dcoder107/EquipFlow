@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import DateTime, Enum, LargeBinary, String
+from sqlalchemy import DateTime, Enum, ForeignKey, LargeBinary, String
 from sqlalchemy.orm import Mapped, deferred, mapped_column, relationship
 
 from app.database import Base
@@ -31,6 +31,14 @@ class User(Base):
     # Used for web login (students, teachers, staff and admins)
     password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    # About the person. Students must fill in all four; teachers and staff only age and
+    # department (see services/profile.py for the rules).
+    age: Mapped[Optional[int]] = mapped_column(nullable=True)
+    department_id: Mapped[Optional[int]] = mapped_column(ForeignKey("departments.id"), nullable=True, index=True)
+    year_level: Mapped[Optional[int]] = mapped_column(nullable=True)   # 1 = 1st year ...
+    program_id: Mapped[Optional[int]] = mapped_column(ForeignKey("programs.id"), nullable=True, index=True)
+    department = relationship("Department")
+    program = relationship("Program")
     # Profile photo: a small processed JPEG (about 10-30 KB) stored right in the database.
     # `deferred` means it is only read when asked for, so listing users never drags the
     # picture bytes along. avatar_updated_at is NULL when the user has no photo.

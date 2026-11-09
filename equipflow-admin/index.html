@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="robots" content="noindex, nofollow" />
+    <script>
+      // Apply the saved light/dark choice before the page draws, so there is no flash.
+      // (The same rules live in src/theme.jsx; keep the two in sync.)
+      (function () {
+        try {
+          var saved = localStorage.getItem('equipflow-admin.theme')
+          var dark = saved === 'dark' ||
+            ((saved !== 'light') && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches)
+          var root = document.documentElement
+          root.dataset.theme = dark ? 'dark' : 'light'
+          root.style.colorScheme = dark ? 'dark' : 'light'
+          var meta = document.querySelector('meta[name="theme-color"]')
+          if (meta) meta.setAttribute('content', dark ? '#161b24' : '#ffffff')
+        } catch (e) {}
+      })()
+    </script>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>EquipFlow Admin</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

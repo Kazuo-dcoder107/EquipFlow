@@ -9,7 +9,8 @@ Creates (password for every account: password123):
   T-001   Tess          teacher (active)
   T-002   Tomas         teacher waiting for admin approval
   24-0003 Nico          student who still has to link an ID card at the kiosk
-plus categories, genres, 23 books and some hardware.
+plus categories, genres, 23 books and some hardware, and a DEMO kiosk whose API key is
+"demo-kiosk-key" (for trying the kiosk API and for tests; never use this key for a real kiosk).
 Never run this on a database with real records: it refuses unless the database is empty.
 """
 from datetime import timedelta
@@ -18,7 +19,7 @@ from sqlalchemy import func, select
 
 import app.models  # noqa: F401
 from app.database import Base, SessionLocal, engine
-from app.models import (Category, CategoryType, Department, Equipment, EquipmentStatus, Genre, Penalty,
+from app.models import (Category, CategoryType, Department, Equipment, EquipmentStatus, Genre, Kiosk, Penalty,
                         PenaltyStatus, PenaltyType, Program, Transaction, TransactionStatus, User, UserRole,
                         UserStatus)
 from app.security import hash_password
@@ -59,6 +60,7 @@ def main() -> None:
         projector = Category(name="Projector", type=CategoryType.hardware, loan_days=1, fine_per_day=30)
         genres = {name: Genre(name=name) for name in BOOKS}
         db.add_all([book, laptop, kit, projector, *genres.values()])
+        db.add(Kiosk(name="Demo kiosk", api_key="demo-kiosk-key"))
 
         def user(sr, name, email, **kw):
             u = User(sr_code=sr, full_name=name, email=email, password_hash=pw, **kw)

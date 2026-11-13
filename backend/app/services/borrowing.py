@@ -96,6 +96,12 @@ def _blocked_reason(db: Session, user_id: int, now: datetime) -> Optional[Result
     return None
 
 
+def blocked_code(db: Session, user_id: int) -> Optional[str]:
+    """The block code (unpaid_fine or has_overdue) if this user cannot borrow right now, else None."""
+    blocked = _blocked_reason(db, user_id, _now())
+    return blocked.code if blocked else None
+
+
 def login(db: Session, user_uid: str, kiosk_id: Optional[int] = None) -> Result:
     """The ID-tag tap that opens a kiosk session. The caller opens the session on ok."""
     kind, owner = resolve_tag(db, user_uid)

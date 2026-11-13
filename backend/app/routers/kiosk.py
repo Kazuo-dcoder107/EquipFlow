@@ -45,6 +45,7 @@ def enroll(body: EnrollIn, kiosk: Kiosk = Depends(get_kiosk), db: Session = Depe
 @router.get("/scan/{uid}", response_model=ScanOut)
 def scan(uid: str, kiosk: Kiosk = Depends(get_kiosk), db: Session = Depends(get_db)):
     """Tell the firmware what a tapped tag is, so it can show the right screen or alert."""
+    sessions.current_user_id(kiosk.id)     # a tap is activity: keeps a logged-in user's session alive
     kind, owner = resolve_tag(db, uid)
     if kind is None:
         return ScanOut(ok=False, code="unknown_tag", message="Unknown tag")
@@ -66,7 +67,8 @@ def login(body: LoginIn, kiosk: Kiosk = Depends(get_kiosk), db: Session = Depend
         return LoginOut(ok=False, code=r.code, message=r.message)
     sessions.open_session(kiosk.id, r.user.id)
     return LoginOut(ok=True, code=r.code, message=r.message, name=r.user.full_name,
-                    role=r.user.role.value, session_seconds=SESSION_TIMEOUT_SECONDS)
+                    role=r.user.role.value, session_seconds=SESSION_TIMEOUT_SECONDS,
+                    borrowing_blocked=borrowing.blocked_code(db, r.user.id))
 
 
 @router.post("/logout", response_model=ResultOut)

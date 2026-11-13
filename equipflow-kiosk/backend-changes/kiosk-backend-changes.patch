@@ -1,0 +1,97 @@
+diff -ruN orig/app/routers/kiosk.py backend/app/routers/kiosk.py
+--- orig/app/routers/kiosk.py	2026-11-10 12:18:25.837692309 +0000
++++ backend/app/routers/kiosk.py	2026-11-10 12:18:25.850548968 +0000
+@@ -45,6 +45,7 @@
+ @router.get("/scan/{uid}", response_model=ScanOut)
+ def scan(uid: str, kiosk: Kiosk = Depends(get_kiosk), db: Session = Depends(get_db)):
+     """Tell the firmware what a tapped tag is, so it can show the right screen or alert."""
++    sessions.current_user_id(kiosk.id)     # a tap is activity: keeps a logged-in user's session alive
+     kind, owner = resolve_tag(db, uid)
+     if kind is None:
+         return ScanOut(ok=False, code="unknown_tag", message="Unknown tag")
+@@ -66,7 +67,8 @@
+         return LoginOut(ok=False, code=r.code, message=r.message)
+     sessions.open_session(kiosk.id, r.user.id)
+     return LoginOut(ok=True, code=r.code, message=r.message, name=r.user.full_name,
+-                    role=r.user.role.value, session_seconds=SESSION_TIMEOUT_SECONDS)
++                    role=r.user.role.value, session_seconds=SESSION_TIMEOUT_SECONDS,
++                    borrowing_blocked=borrowing.blocked_code(db, r.user.id))
+ 
+ 
+ @router.post("/logout", response_model=ResultOut)
+diff -ruN orig/app/schemas/kiosk.py backend/app/schemas/kiosk.py
+--- orig/app/schemas/kiosk.py	2026-11-10 12:18:25.837469569 +0000
++++ backend/app/schemas/kiosk.py	2026-11-10 12:18:25.850050721 +0000
+@@ -40,6 +40,7 @@
+     name: Optional[str] = None
+     role: Optional[str] = None
+     session_seconds: Optional[int] = None   # inactivity timeout, for the on-screen countdown
++    borrowing_blocked: Optional[str] = None  # "unpaid_fine" / "has_overdue": may log in and return, not borrow
+ 
+ 
+ class ResultOut(BaseModel):
+diff -ruN orig/app/services/borrowing.py backend/app/services/borrowing.py
+--- orig/app/services/borrowing.py	2026-11-10 12:18:25.837367883 +0000
++++ backend/app/services/borrowing.py	2026-11-10 12:18:36.737345674 +0000
+@@ -96,6 +96,12 @@
+     return None
+ 
+ 
++def blocked_code(db: Session, user_id: int) -> Optional[str]:
++    """The block code (unpaid_fine or has_overdue) if this user cannot borrow right now, else None."""
++    blocked = _blocked_reason(db, user_id, _now())
++    return blocked.code if blocked else None
++
++
+ def login(db: Session, user_uid: str, kiosk_id: Optional[int] = None) -> Result:
+     """The ID-tag tap that opens a kiosk session. The caller opens the session on ok."""
+     kind, owner = resolve_tag(db, user_uid)
+diff -ruN orig/tests/test_rfid_design.py backend/tests/test_rfid_design.py
+--- orig/tests/test_rfid_design.py	2026-11-10 12:18:25.838036040 +0000
++++ backend/tests/test_rfid_design.py	2026-11-10 12:18:25.851833280 +0000
+@@ -168,6 +168,45 @@
+     assert e.ret("B1")["ok"]
+ 
+ 
++def test_login_reports_when_borrowing_is_blocked(e):
++    assert e.login("US")["borrowing_blocked"] is None
++    assert e.borrow("L1", agreed=True)["ok"]
++    with e.Session() as s:                  # 3 days late (rounded up)
++        t = s.query(Transaction).one(); t.due_at = _now() - timedelta(days=2, hours=12); s.commit()
++    r = e.login("US")
++    assert r["ok"] and r["borrowing_blocked"] == "has_overdue"     # can log in, told up front
++    assert e.ret("L1")["ok"]                                      # and can still return
++    assert e.login("US")["borrowing_blocked"] == "unpaid_fine"    # returned, fine unpaid
++    pid = e.c.get("/api/penalties", headers=e.admin).json()["items"][0]["id"]
++    e.c.patch(f"/api/penalties/{pid}", headers=e.admin, json={"status": "waived"})
++    assert e.login("US")["borrowing_blocked"] is None
++
++
++def test_failed_login_has_no_blocked_field_set(e):
++    r = e.login("NOPE")
++    assert r["ok"] is False and r["borrowing_blocked"] is None
++
++
++def test_scan_keeps_a_logged_in_session_alive(e, monkeypatch):
++    now = [1000.0]
++    monkeypatch.setattr(sessions, "_clock", lambda: now[0])
++
++    e.login("US")
++    now[0] += 20
++    assert e.c.get("/api/kiosk/scan/B1", headers=K).json()["kind"] == "item"
++    now[0] += 20                            # 40 s since login, but only 20 s since the scan
++    assert e.borrow("B1")["ok"]
++
++    e.login("US")                           # control: with no scan the same gap ends the session
++    now[0] += 40
++    assert e.borrow("B2")["code"] == "no_session"
++
++
++def test_scan_never_opens_a_session(e):
++    e.c.get("/api/kiosk/scan/B1", headers=K)
++    assert e.borrow("B1")["code"] == "no_session"
++
++
+ # ---- teacher / staff rules --------------------------------------------------------------
+ 
+ def due_days(e):

@@ -168,6 +168,45 @@ def test_blocked_user_can_still_return(e):
     assert e.ret("B1")["ok"]
 
 
+def test_login_reports_when_borrowing_is_blocked(e):
+    assert e.login("US")["borrowing_blocked"] is None
+    assert e.borrow("L1", agreed=True)["ok"]
+    with e.Session() as s:                  # 3 days late (rounded up)
+        t = s.query(Transaction).one(); t.due_at = _now() - timedelta(days=2, hours=12); s.commit()
+    r = e.login("US")
+    assert r["ok"] and r["borrowing_blocked"] == "has_overdue"     # can log in, told up front
+    assert e.ret("L1")["ok"]                                      # and can still return
+    assert e.login("US")["borrowing_blocked"] == "unpaid_fine"    # returned, fine unpaid
+    pid = e.c.get("/api/penalties", headers=e.admin).json()["items"][0]["id"]
+    e.c.patch(f"/api/penalties/{pid}", headers=e.admin, json={"status": "waived"})
+    assert e.login("US")["borrowing_blocked"] is None
+
+
+def test_failed_login_has_no_blocked_field_set(e):
+    r = e.login("NOPE")
+    assert r["ok"] is False and r["borrowing_blocked"] is None
+
+
+def test_scan_keeps_a_logged_in_session_alive(e, monkeypatch):
+    now = [1000.0]
+    monkeypatch.setattr(sessions, "_clock", lambda: now[0])
+
+    e.login("US")
+    now[0] += 20
+    assert e.c.get("/api/kiosk/scan/B1", headers=K).json()["kind"] == "item"
+    now[0] += 20                            # 40 s since login, but only 20 s since the scan
+    assert e.borrow("B1")["ok"]
+
+    e.login("US")                           # control: with no scan the same gap ends the session
+    now[0] += 40
+    assert e.borrow("B2")["code"] == "no_session"
+
+
+def test_scan_never_opens_a_session(e):
+    e.c.get("/api/kiosk/scan/B1", headers=K)
+    assert e.borrow("B1")["code"] == "no_session"
+
+
 # ---- teacher / staff rules --------------------------------------------------------------
 
 def due_days(e):

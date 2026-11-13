@@ -1,0 +1,4 @@
+.pio/
+.vscode/
+# Wi-Fi password + kiosk API key: never commit them
+include/secrets.h

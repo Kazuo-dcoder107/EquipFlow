@@ -40,6 +40,7 @@ class LoginOut(BaseModel):
     name: Optional[str] = None
     role: Optional[str] = None
     session_seconds: Optional[int] = None   # inactivity timeout, for the on-screen countdown
+    borrowing_blocked: Optional[str] = None  # "unpaid_fine" / "has_overdue": may log in and return, not borrow
 
 
 class ResultOut(BaseModel):

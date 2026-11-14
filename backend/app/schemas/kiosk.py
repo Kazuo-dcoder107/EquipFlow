@@ -23,6 +23,7 @@ class LoginIn(BaseModel):
 class BorrowIn(BaseModel):
     item_uid: str          # who is borrowing comes from the kiosk's login session
     agreed: bool = False   # kiosk sends true after the user accepts the terms
+    terms_version: Optional[str] = None   # version of the terms the user saw; a stale one is refused
 
     _tag = field_validator("item_uid")(lambda cls, v: normalize_tag(v))
 
@@ -85,3 +86,11 @@ class ScanOut(BaseModel):
     status: Optional[str] = None
     loan_days: Optional[int] = None
     requires_agreement: Optional[bool] = None
+
+
+class TermsOut(BaseModel):
+    ok: bool
+    code: str
+    message: str
+    version: str           # changes whenever the text changes
+    text: str              # plain text, lines separated by \n

@@ -102,13 +102,17 @@ def test_metadata_is_stripped_and_rotation_is_applied():
     assert out.getpixel((60, 245))[2] > 150 and out.getpixel((60, 245))[0] < 100
 
 
-@pytest.mark.parametrize("data,message", [
-    (b"", "empty"),
-    (b"just some text, not a picture", "not a valid picture"),
-    (picture("PNG")[:40], "not a valid picture"),                  # a cut-off file
-    (picture("GIF", mode="P", color=1), "JPG, PNG or WebP"),        # real image, not an allowed type
-    (picture("BMP"), "JPG, PNG or WebP"),
-])
+@pytest.mark.parametrize(
+    "data,message",
+    [
+        (b"", "empty"),
+        (b"just some text, not a picture", "not a valid picture"),
+        (picture("PNG")[:40], "not a valid picture"),
+        (picture("GIF", mode="P", color=1), "JPG, PNG or WebP"),
+        (picture("BMP"), "JPG, PNG or WebP"),
+    ],
+    ids=["empty", "text", "truncated-png", "gif", "bmp"]
+)
 def test_bad_uploads_are_refused_with_a_readable_message(data, message):
     with pytest.raises(AvatarError, match=message):
         process_avatar(data)

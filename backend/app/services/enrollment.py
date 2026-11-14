@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.models import EventResult, EventType, User, UserStatus
 from app.services.borrowing import Result, _fail, _log
-from app.services.tags import resolve_tag
+from app.services.tags import normalize_tag, resolve_tag
 
 
 def enroll(db: Session, sr_code: str, user_uid: str, kiosk_id: Optional[int] = None) -> Result:
@@ -24,7 +24,7 @@ def enroll(db: Session, sr_code: str, user_uid: str, kiosk_id: Optional[int] = N
     if kind == "user":
         return _fail(db, EventType.enroll, "tag_taken", "Tag already used", **ids)
 
-    user.rfid_uid = user_uid
+    user.rfid_uid = normalize_tag(user_uid)     # stored the way lookups compare it
     user.rfid_active = True
     user.status = UserStatus.active
     _log(db, EventType.enroll, EventResult.success, **ids)

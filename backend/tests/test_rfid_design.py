@@ -207,6 +207,92 @@ def test_scan_never_opens_a_session(e):
     assert e.borrow("B1")["code"] == "no_session"
 
 
+def test_terms_endpoint_returns_text_and_a_version_that_follows_the_text(e, tmp_path, monkeypatch):
+    from app.services import terms as terms_service
+    f = tmp_path / "terms.txt"
+    monkeypatch.setattr(terms_service, "KIOSK_TERMS_FILE", f)
+
+    f.write_text("Be careful.\r\nReturn it.\n", encoding="utf-8")
+    a = e.c.get("/api/kiosk/terms", headers=K).json()
+    assert a["ok"] and a["text"] == "Be careful.\nReturn it." and len(a["version"]) == 8
+
+    assert e.c.get("/api/kiosk/terms", headers=K).json()["version"] == a["version"]   # stable
+    f.write_text("Different words.", encoding="utf-8")
+    assert e.c.get("/api/kiosk/terms", headers=K).json()["version"] != a["version"]
+
+    f.unlink()                                          # missing file: built-in default, never an error
+    d = e.c.get("/api/kiosk/terms", headers=K).json()
+    assert d["ok"] and "Return on time" in d["text"]
+
+
+def test_terms_endpoint_needs_the_kiosk_key(e):
+    assert e.c.get("/api/kiosk/terms").status_code == 401
+    assert e.c.get("/api/kiosk/terms", headers={"X-API-Key": "wrong"}).status_code == 401
+
+
+def test_borrow_refuses_a_stale_terms_version_and_accepts_the_current_one(e):
+    version = e.c.get("/api/kiosk/terms", headers=K).json()["version"]
+    e.login("US")
+    stale = e.c.post("/api/kiosk/borrow", headers=K,
+                     json={"item_uid": "L1", "agreed": True, "terms_version": "stale000"}).json()
+    assert stale["ok"] is False and stale["code"] == "terms_changed"
+    with e.Session() as s:                              # nothing was recorded
+        assert s.query(Transaction).count() == 0
+
+    ok = e.c.post("/api/kiosk/borrow", headers=K,
+                  json={"item_uid": "L1", "agreed": True, "terms_version": version}).json()
+    assert ok["ok"] is True
+
+
+def test_borrow_without_a_terms_version_still_works(e):      # older firmware keeps working
+    e.login("US")
+    assert e.borrow("L1", agreed=True)["ok"]
+
+
+def test_stale_terms_do_not_hide_a_missing_session(e):
+    r = e.c.post("/api/kiosk/borrow", headers=K,
+                 json={"item_uid": "L1", "agreed": True, "terms_version": "stale000"}).json()
+    assert r["code"] == "no_session"
+
+
+def _add_pending(e, n):
+    with e.Session() as s:
+        for i in range(n):
+            s.add(User(sr_code=f"P{i:02d}", full_name=f"Pending {i}", email=f"p{i}@x",
+                       status=UserStatus.pending_enrollment, password_hash=hash_password("password123")))
+        s.commit()
+
+
+def test_pending_users_respects_the_limit_and_keeps_oldest_first(e):
+    _add_pending(e, 5)
+    allp = e.c.get("/api/kiosk/pending-users", headers=K).json()["users"]
+    assert [u["sr_code"] for u in allp] == ["P00", "P01", "P02", "P03", "P04"]
+    two = e.c.get("/api/kiosk/pending-users?limit=2", headers=K).json()["users"]
+    assert [u["sr_code"] for u in two] == ["P00", "P01"]
+    assert e.c.get("/api/kiosk/pending-users?limit=0", headers=K).status_code == 422
+    assert e.c.get("/api/kiosk/pending-users?limit=999", headers=K).status_code == 422
+
+
+def test_enroll_removes_the_user_from_the_pending_list_and_the_tag_then_logs_in(e):
+    _add_pending(e, 2)
+    r = e.c.post("/api/kiosk/enroll", headers=K, json={"sr_code": "P00", "user_uid": "NEWTAG1"}).json()
+    assert r["ok"] and r["code"] == "ok"
+    left = e.c.get("/api/kiosk/pending-users", headers=K).json()["users"]
+    assert [u["sr_code"] for u in left] == ["P01"]
+    assert e.login("NEWTAG1")["ok"]
+    again = e.c.post("/api/kiosk/enroll", headers=K, json={"sr_code": "P01", "user_uid": "NEWTAG1"}).json()
+    assert again["code"] == "tag_taken"                  # one tag, one person
+
+
+def test_enroll_stores_the_tag_in_the_form_lookups_use(e):
+    _add_pending(e, 1)
+    r = e.c.post("/api/kiosk/enroll", headers=K, json={"sr_code": "P00", "user_uid": "04:a1:b2:c3"}).json()
+    assert r["ok"]
+    with e.Session() as s:
+        assert s.query(User).filter_by(sr_code="P00").one().rfid_uid == "04A1B2C3"
+    assert e.login("04a1b2c3")["ok"]                     # however the tag is typed or sent
+
+
 # ---- teacher / staff rules --------------------------------------------------------------
 
 def due_days(e):

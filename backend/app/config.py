@@ -44,3 +44,11 @@ NEAR_DUE_HOURS = int(os.getenv("NEAR_DUE_HOURS", "24"))           # "due soon" r
 OVERDUE_REMINDER_DAYS = int(os.getenv("OVERDUE_REMINDER_DAYS", "1"))  # repeat overdue emails; 0 = send once
 NOTIFY_INTERVAL_MINUTES = int(os.getenv("NOTIFY_INTERVAL_MINUTES", "60"))
 SCHEDULER_ENABLED = os.getenv("SCHEDULER_ENABLED", "true").lower() not in ("0", "false", "no")
+
+# ---- Kiosk terms (shown on the kiosk before a hardware borrow) ----
+# Plain text in a file you can edit at any time, no restart needed. Keep it SHORT: the kiosk has a
+# 2-line, 16-character screen, so about 30 characters fit on each page. Used if the file is missing.
+KIOSK_TERMS_FILE = Path(os.getenv("KIOSK_TERMS_FILE") or (Path(__file__).resolve().parent.parent / "kiosk_terms.txt"))
+DEFAULT_KIOSK_TERMS = ("Handle with care.\n"
+                       "You are liable for loss or damage.\n"
+                       "Return on time or a fine applies.")

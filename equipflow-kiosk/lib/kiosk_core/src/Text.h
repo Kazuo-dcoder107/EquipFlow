@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <string>
+#include <vector>
 
 std::string fit(const std::string& s, size_t width);                 // truncate / pad right
 std::string rightAlign(const std::string& left, const std::string& right, size_t width);
@@ -17,4 +18,9 @@ std::string formatDue(const std::string& isoUtc, int utcOffsetHours);
 // The 1602 (HD44780) shows plain ASCII only. Turns UTF-8 text from the server into ASCII:
 // accented Latin letters lose their accent (Peña -> Pena), curly quotes/dashes become plain,
 // anything else becomes '?'.
-std::string toLcdAscii(const std::string& utf8);
+// Newlines and tabs become spaces, unless keepNewlines (used for the multi-line terms text).
+std::string toLcdAscii(const std::string& utf8, bool keepNewlines = false);
+
+// Word-wraps text to `width` columns. Each '\n' starts a new paragraph. Words longer than a row
+// are broken. At most maxRows rows are returned.
+std::vector<std::string> wrapText(const std::string& text, size_t width, size_t maxRows);

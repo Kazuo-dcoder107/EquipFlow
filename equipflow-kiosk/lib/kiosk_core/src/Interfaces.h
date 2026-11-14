@@ -10,10 +10,14 @@ public:
     virtual ~IApi() {}
     virtual ScanResp      scan(const std::string& uid) = 0;
     virtual LoginResp     login(const std::string& uid) = 0;
-    virtual BorrowResp    borrow(const std::string& itemUid, bool agreed) = 0;
+    // termsVersion: the version of the terms the user saw (empty if none were shown).
+    virtual BorrowResp    borrow(const std::string& itemUid, bool agreed, const std::string& termsVersion) = 0;
     virtual ReturnResp    returnItem(const std::string& itemUid) = 0;
     virtual EquipmentResp equipment(const std::string& itemUid) = 0;
     virtual ApiResult     logout() = 0;
+    virtual TermsResp     terms() = 0;
+    virtual PendingResp   pendingUsers(int limit) = 0;
+    virtual ApiResult     enroll(const std::string& srCode, const std::string& userUid) = 0;
 };
 
 class IDisplay {          // 16x2 character LCD: each line is at most 16 characters

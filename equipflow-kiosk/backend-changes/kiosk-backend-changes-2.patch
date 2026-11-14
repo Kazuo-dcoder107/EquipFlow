@@ -1,0 +1,249 @@
+diff -ruN after1/app/config.py backend/app/config.py
+--- after1/app/config.py	2026-11-13 03:16:47.747617938 +0000
++++ backend/app/config.py	2026-11-13 03:16:47.789219999 +0000
+@@ -44,3 +44,11 @@
+ OVERDUE_REMINDER_DAYS = int(os.getenv("OVERDUE_REMINDER_DAYS", "1"))  # repeat overdue emails; 0 = send once
+ NOTIFY_INTERVAL_MINUTES = int(os.getenv("NOTIFY_INTERVAL_MINUTES", "60"))
+ SCHEDULER_ENABLED = os.getenv("SCHEDULER_ENABLED", "true").lower() not in ("0", "false", "no")
++
++# ---- Kiosk terms (shown on the kiosk before a hardware borrow) ----
++# Plain text in a file you can edit at any time, no restart needed. Keep it SHORT: the kiosk has a
++# 2-line, 16-character screen, so about 30 characters fit on each page. Used if the file is missing.
++KIOSK_TERMS_FILE = Path(os.getenv("KIOSK_TERMS_FILE") or (Path(__file__).resolve().parent.parent / "kiosk_terms.txt"))
++DEFAULT_KIOSK_TERMS = ("Handle with care.\n"
++                       "You are liable for loss or damage.\n"
++                       "Return on time or a fine applies.")
+diff -ruN after1/app/routers/kiosk.py backend/app/routers/kiosk.py
+--- after1/app/routers/kiosk.py	2026-11-13 03:16:47.748218169 +0000
++++ backend/app/routers/kiosk.py	2026-11-13 03:16:47.804200145 +0000
+@@ -6,7 +6,7 @@
+ """
+ from datetime import datetime, timezone
+ 
+-from fastapi import APIRouter, Depends
++from fastapi import APIRouter, Depends, Query
+ from sqlalchemy import select
+ from sqlalchemy.orm import Session
+ 
+@@ -14,9 +14,9 @@
+ from app.database import get_db
+ from app.models import CategoryType, Equipment, Kiosk, User, UserStatus
+ from app.schemas.kiosk import (BorrowIn, EnrollIn, EquipmentOut, LoginIn, LoginOut,
+-                               PendingUser, PendingUsersOut, ResultOut, ReturnIn, ScanOut)
++                               PendingUser, PendingUsersOut, ResultOut, ReturnIn, ScanOut, TermsOut)
+ from app.security import get_kiosk
+-from app.services import borrowing, enrollment, sessions
++from app.services import borrowing, enrollment, sessions, terms
+ from app.services.tags import normalize_tag, resolve_tag
+ 
+ router = APIRouter(prefix="/api/kiosk", tags=["kiosk"])
+@@ -29,9 +29,11 @@
+ 
+ 
+ @router.get("/pending-users", response_model=PendingUsersOut)
+-def pending_users(kiosk: Kiosk = Depends(get_kiosk), db: Session = Depends(get_db)):
++def pending_users(limit: int = Query(50, ge=1, le=200), kiosk: Kiosk = Depends(get_kiosk),
++                  db: Session = Depends(get_db)):
++    """Accounts waiting for an ID tag, oldest first. `limit` keeps the reply small for the ESP32."""
+     rows = db.scalars(select(User).where(User.status == UserStatus.pending_enrollment)
+-                      .order_by(User.created_at)).all()
++                      .order_by(User.created_at).limit(limit)).all()
+     return PendingUsersOut(users=[PendingUser(sr_code=u.sr_code, full_name=u.full_name)
+                                   for u in rows])
+ 
+@@ -42,6 +44,13 @@
+     return ResultOut(ok=r.ok, code=r.code, message=r.message)
+ 
+ 
++@router.get("/terms", response_model=TermsOut)
++def kiosk_terms(kiosk: Kiosk = Depends(get_kiosk)):
++    """The text to show before a hardware borrow, plus its version (see services/terms.py)."""
++    version, text = terms.current_terms()
++    return TermsOut(ok=True, code="ok", message="Terms", version=version, text=text)
++
++
+ @router.get("/scan/{uid}", response_model=ScanOut)
+ def scan(uid: str, kiosk: Kiosk = Depends(get_kiosk), db: Session = Depends(get_db)):
+     """Tell the firmware what a tapped tag is, so it can show the right screen or alert."""
+@@ -95,6 +104,8 @@
+     user_id = sessions.current_user_id(kiosk.id)
+     if user_id is None:
+         return ResultOut(ok=False, code="no_session", message="Tap your ID first")
++    if body.terms_version is not None and body.terms_version != terms.current_terms()[0]:
++        return ResultOut(ok=False, code="terms_changed", message="Terms updated. Try again")
+     r = borrowing.borrow(db, body.item_uid, user_id, agreed=body.agreed, kiosk_id=kiosk.id)
+     return ResultOut(ok=r.ok, code=r.code, message=r.message,
+                      due_at=r.transaction.due_at if r.transaction else None)
+diff -ruN after1/app/schemas/kiosk.py backend/app/schemas/kiosk.py
+--- after1/app/schemas/kiosk.py	2026-11-13 03:16:47.747546965 +0000
++++ backend/app/schemas/kiosk.py	2026-11-13 03:16:47.803917077 +0000
+@@ -23,6 +23,7 @@
+ class BorrowIn(BaseModel):
+     item_uid: str          # who is borrowing comes from the kiosk's login session
+     agreed: bool = False   # kiosk sends true after the user accepts the terms
++    terms_version: Optional[str] = None   # version of the terms the user saw; a stale one is refused
+ 
+     _tag = field_validator("item_uid")(lambda cls, v: normalize_tag(v))
+ 
+@@ -85,3 +86,11 @@
+     status: Optional[str] = None
+     loan_days: Optional[int] = None
+     requires_agreement: Optional[bool] = None
++
++
++class TermsOut(BaseModel):
++    ok: bool
++    code: str
++    message: str
++    version: str           # changes whenever the text changes
++    text: str              # plain text, lines separated by \n
+diff -ruN after1/app/services/enrollment.py backend/app/services/enrollment.py
+--- after1/app/services/enrollment.py	2026-11-13 03:16:47.746813787 +0000
++++ backend/app/services/enrollment.py	2026-11-13 03:17:05.148811000 +0000
+@@ -6,7 +6,7 @@
+ 
+ from app.models import EventResult, EventType, User, UserStatus
+ from app.services.borrowing import Result, _fail, _log
+-from app.services.tags import resolve_tag
++from app.services.tags import normalize_tag, resolve_tag
+ 
+ 
+ def enroll(db: Session, sr_code: str, user_uid: str, kiosk_id: Optional[int] = None) -> Result:
+@@ -24,7 +24,7 @@
+     if kind == "user":
+         return _fail(db, EventType.enroll, "tag_taken", "Tag already used", **ids)
+ 
+-    user.rfid_uid = user_uid
++    user.rfid_uid = normalize_tag(user_uid)     # stored the way lookups compare it
+     user.rfid_active = True
+     user.status = UserStatus.active
+     _log(db, EventType.enroll, EventResult.success, **ids)
+diff -ruN after1/app/services/terms.py backend/app/services/terms.py
+--- after1/app/services/terms.py	1970-01-01 00:00:00.000000000 +0000
++++ backend/app/services/terms.py	2026-11-13 03:16:47.792409521 +0000
+@@ -0,0 +1,22 @@
++"""The terms a user accepts at the kiosk before borrowing hardware.
++
++The text lives in a plain file (config.KIOSK_TERMS_FILE) so staff can edit it. The version is a hash
++of the text: it changes by itself whenever the text changes. The kiosk sends the version it showed
++back when the user accepts, so acceptance can never be recorded against newer, unseen wording.
++"""
++import hashlib
++from typing import Tuple
++
++from app.config import DEFAULT_KIOSK_TERMS, KIOSK_TERMS_FILE
++
++MAX_CHARS = 400     # the kiosk screen is tiny; longer text is cut
++
++
++def current_terms() -> Tuple[str, str]:
++    """Return (version, text)."""
++    try:
++        text = KIOSK_TERMS_FILE.read_text(encoding="utf-8")
++    except OSError:
++        text = DEFAULT_KIOSK_TERMS
++    text = text.replace("\r\n", "\n").strip()[:MAX_CHARS].strip() or DEFAULT_KIOSK_TERMS
++    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:8], text
+diff -ruN after1/kiosk_terms.txt backend/kiosk_terms.txt
+--- after1/kiosk_terms.txt	1970-01-01 00:00:00.000000000 +0000
++++ backend/kiosk_terms.txt	2026-11-13 03:16:47.792409521 +0000
+@@ -0,0 +1,3 @@
++Handle with care.
++You are liable for loss or damage.
++Return on time or a fine applies.
+diff -ruN after1/tests/test_rfid_design.py backend/tests/test_rfid_design.py
+--- after1/tests/test_rfid_design.py	2026-11-13 03:16:47.749557326 +0000
++++ backend/tests/test_rfid_design.py	2026-11-13 03:17:05.149170889 +0000
+@@ -207,6 +207,92 @@
+     assert e.borrow("B1")["code"] == "no_session"
+ 
+ 
++def test_terms_endpoint_returns_text_and_a_version_that_follows_the_text(e, tmp_path, monkeypatch):
++    from app.services import terms as terms_service
++    f = tmp_path / "terms.txt"
++    monkeypatch.setattr(terms_service, "KIOSK_TERMS_FILE", f)
++
++    f.write_text("Be careful.\r\nReturn it.\n", encoding="utf-8")
++    a = e.c.get("/api/kiosk/terms", headers=K).json()
++    assert a["ok"] and a["text"] == "Be careful.\nReturn it." and len(a["version"]) == 8
++
++    assert e.c.get("/api/kiosk/terms", headers=K).json()["version"] == a["version"]   # stable
++    f.write_text("Different words.", encoding="utf-8")
++    assert e.c.get("/api/kiosk/terms", headers=K).json()["version"] != a["version"]
++
++    f.unlink()                                          # missing file: built-in default, never an error
++    d = e.c.get("/api/kiosk/terms", headers=K).json()
++    assert d["ok"] and "Return on time" in d["text"]
++
++
++def test_terms_endpoint_needs_the_kiosk_key(e):
++    assert e.c.get("/api/kiosk/terms").status_code == 401
++    assert e.c.get("/api/kiosk/terms", headers={"X-API-Key": "wrong"}).status_code == 401
++
++
++def test_borrow_refuses_a_stale_terms_version_and_accepts_the_current_one(e):
++    version = e.c.get("/api/kiosk/terms", headers=K).json()["version"]
++    e.login("US")
++    stale = e.c.post("/api/kiosk/borrow", headers=K,
++                     json={"item_uid": "L1", "agreed": True, "terms_version": "stale000"}).json()
++    assert stale["ok"] is False and stale["code"] == "terms_changed"
++    with e.Session() as s:                              # nothing was recorded
++        assert s.query(Transaction).count() == 0
++
++    ok = e.c.post("/api/kiosk/borrow", headers=K,
++                  json={"item_uid": "L1", "agreed": True, "terms_version": version}).json()
++    assert ok["ok"] is True
++
++
++def test_borrow_without_a_terms_version_still_works(e):      # older firmware keeps working
++    e.login("US")
++    assert e.borrow("L1", agreed=True)["ok"]
++
++
++def test_stale_terms_do_not_hide_a_missing_session(e):
++    r = e.c.post("/api/kiosk/borrow", headers=K,
++                 json={"item_uid": "L1", "agreed": True, "terms_version": "stale000"}).json()
++    assert r["code"] == "no_session"
++
++
++def _add_pending(e, n):
++    with e.Session() as s:
++        for i in range(n):
++            s.add(User(sr_code=f"P{i:02d}", full_name=f"Pending {i}", email=f"p{i}@x",
++                       status=UserStatus.pending_enrollment, password_hash=hash_password("password123")))
++        s.commit()
++
++
++def test_pending_users_respects_the_limit_and_keeps_oldest_first(e):
++    _add_pending(e, 5)
++    allp = e.c.get("/api/kiosk/pending-users", headers=K).json()["users"]
++    assert [u["sr_code"] for u in allp] == ["P00", "P01", "P02", "P03", "P04"]
++    two = e.c.get("/api/kiosk/pending-users?limit=2", headers=K).json()["users"]
++    assert [u["sr_code"] for u in two] == ["P00", "P01"]
++    assert e.c.get("/api/kiosk/pending-users?limit=0", headers=K).status_code == 422
++    assert e.c.get("/api/kiosk/pending-users?limit=999", headers=K).status_code == 422
++
++
++def test_enroll_removes_the_user_from_the_pending_list_and_the_tag_then_logs_in(e):
++    _add_pending(e, 2)
++    r = e.c.post("/api/kiosk/enroll", headers=K, json={"sr_code": "P00", "user_uid": "NEWTAG1"}).json()
++    assert r["ok"] and r["code"] == "ok"
++    left = e.c.get("/api/kiosk/pending-users", headers=K).json()["users"]
++    assert [u["sr_code"] for u in left] == ["P01"]
++    assert e.login("NEWTAG1")["ok"]
++    again = e.c.post("/api/kiosk/enroll", headers=K, json={"sr_code": "P01", "user_uid": "NEWTAG1"}).json()
++    assert again["code"] == "tag_taken"                  # one tag, one person
++
++
++def test_enroll_stores_the_tag_in_the_form_lookups_use(e):
++    _add_pending(e, 1)
++    r = e.c.post("/api/kiosk/enroll", headers=K, json={"sr_code": "P00", "user_uid": "04:a1:b2:c3"}).json()
++    assert r["ok"]
++    with e.Session() as s:
++        assert s.query(User).filter_by(sr_code="P00").one().rfid_uid == "04A1B2C3"
++    assert e.login("04a1b2c3")["ok"]                     # however the tag is typed or sent
++
++
+ # ---- teacher / staff rules --------------------------------------------------------------
+ 
+ def due_days(e):

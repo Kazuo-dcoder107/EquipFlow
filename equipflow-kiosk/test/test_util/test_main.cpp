@@ -1,7 +1,11 @@
 #include <unity.h>
+#include <string>
+#include <vector>
 #include "Buttons.h"
 #include "Text.h"
 #include "Tone.h"
+
+#define STR(x) (x).c_str()
 
 void setUp() {}
 void tearDown() {}
@@ -96,6 +100,49 @@ void test_lcd_ascii_strips_accents_and_replaces_the_rest() {
     TEST_ASSERT_EQUAL_STRING("bad?", toLcdAscii("bad\xC3").c_str());                      // truncated UTF-8
 }
 
+void test_wrap_text_basic_and_paragraphs() {
+    std::vector<std::string> r = wrapText("Handle with care\nReturn on time", 15, 24);
+    TEST_ASSERT_EQUAL_INT(3, (long)r.size());
+    TEST_ASSERT_EQUAL_STRING("Handle with", STR(r[0]));
+    TEST_ASSERT_EQUAL_STRING("care", STR(r[1]));
+    TEST_ASSERT_EQUAL_STRING("Return on time", STR(r[2]));
+}
+
+void test_wrap_text_exact_fit_and_long_words() {
+    std::vector<std::string> a = wrapText("abcde fghij", 5, 24);
+    TEST_ASSERT_EQUAL_INT(2, (long)a.size());
+    TEST_ASSERT_EQUAL_STRING("abcde", STR(a[0]));
+    TEST_ASSERT_EQUAL_STRING("fghij", STR(a[1]));
+    std::vector<std::string> b = wrapText("abcdefghijklmnopqrstuvwxyz", 10, 24);
+    TEST_ASSERT_EQUAL_INT(3, (long)b.size());
+    TEST_ASSERT_EQUAL_STRING("abcdefghij", STR(b[0]));
+    TEST_ASSERT_EQUAL_STRING("uvwxyz", STR(b[2]));
+    std::vector<std::string> c = wrapText("ab cdefghijklmnop", 5, 24);   // long word after a short one
+    TEST_ASSERT_EQUAL_INT(4, (long)c.size());
+    TEST_ASSERT_EQUAL_STRING("ab", STR(c[0]));
+    TEST_ASSERT_EQUAL_STRING("cdefg", STR(c[1]));
+    TEST_ASSERT_EQUAL_STRING("mnop", STR(c[3]));
+}
+
+void test_wrap_text_ignores_extra_spaces_and_blank_lines_and_caps_rows() {
+    std::vector<std::string> a = wrapText("  a   b \n\n\n c  ", 15, 24);
+    TEST_ASSERT_EQUAL_INT(2, (long)a.size());
+    TEST_ASSERT_EQUAL_STRING("a b", STR(a[0]));
+    TEST_ASSERT_EQUAL_STRING("c", STR(a[1]));
+    TEST_ASSERT_EQUAL_INT(0, (long)wrapText("", 15, 24).size());
+    TEST_ASSERT_EQUAL_INT(0, (long)wrapText("text", 0, 24).size());
+    std::string many;
+    for (int i = 0; i < 100; i++) many += "word ";
+    TEST_ASSERT_EQUAL_INT(24, (long)wrapText(many, 15, 24).size());
+    TEST_ASSERT_EQUAL_INT(3, (long)wrapText(many, 15, 3).size());
+}
+
+void test_lcd_ascii_newlines_kept_only_when_asked() {
+    TEST_ASSERT_EQUAL_STRING("a\nb", STR(toLcdAscii("a\nb", true)));
+    TEST_ASSERT_EQUAL_STRING("a b c", STR(toLcdAscii("a\nb\tc\r")));
+    TEST_ASSERT_EQUAL_STRING("a\nb c", STR(toLcdAscii("a\r\nb\tc", true)));
+}
+
 // ---- ToneSequencer -------------------------------------------------------------------
 
 void test_tone_sequence_plays_steps_then_stops() {
@@ -130,6 +177,10 @@ int main() {
     RUN_TEST(test_marquee_scrolls_pauses_and_restarts);
     RUN_TEST(test_format_due_converts_to_local_time);
     RUN_TEST(test_lcd_ascii_strips_accents_and_replaces_the_rest);
+    RUN_TEST(test_wrap_text_basic_and_paragraphs);
+    RUN_TEST(test_wrap_text_exact_fit_and_long_words);
+    RUN_TEST(test_wrap_text_ignores_extra_spaces_and_blank_lines_and_caps_rows);
+    RUN_TEST(test_lcd_ascii_newlines_kept_only_when_asked);
     RUN_TEST(test_tone_sequence_plays_steps_then_stops);
     RUN_TEST(test_tone_none_is_silent);
     return UNITY_END();

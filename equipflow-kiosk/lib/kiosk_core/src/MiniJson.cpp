@@ -19,11 +19,30 @@ class Parser {
 public:
     explicit Parser(const std::string& s) : s_(s) {}
 
-    bool object(std::map<std::string, JsonValue>& out) {
+    bool object(std::map<std::string, JsonValue>& out) { return objectBody(out) && atEnd(); }
+
+    bool array(std::vector<std::map<std::string, JsonValue> >& out) {
+        ws();
+        if (!eat('[')) return false;
+        ws();
+        if (peek() == ']') { ++i_; return atEnd(); }
+        for (;;) {
+            std::map<std::string, JsonValue> m;
+            if (!objectBody(m)) return false;
+            out.push_back(m);
+            ws();
+            if (peek() == ',') { ++i_; continue; }
+            if (peek() == ']') { ++i_; return atEnd(); }
+            return false;
+        }
+    }
+
+private:
+    bool objectBody(std::map<std::string, JsonValue>& out) {
         ws();
         if (!eat('{')) return false;
         ws();
-        if (peek() == '}') { ++i_; return atEnd(); }
+        if (peek() == '}') { ++i_; return true; }
         for (;;) {
             ws();
             std::string key;
@@ -36,12 +55,11 @@ public:
             out[key] = v;
             ws();
             if (peek() == ',') { ++i_; continue; }
-            if (peek() == '}') { ++i_; return atEnd(); }
+            if (peek() == '}') { ++i_; return true; }
             return false;
         }
     }
 
-private:
     const std::string& s_;
     size_t i_ = 0;
 
@@ -143,7 +161,13 @@ private:
     bool value(JsonValue& v) {
         char c = peek();
         if (c == '"') { v.type = JsonValue::String; return string(v.text); }
-        if (c == '{' || c == '[') { v.type = JsonValue::Other; return skipNested(); }
+        if (c == '{' || c == '[') {
+            size_t start = i_;
+            v.type = JsonValue::Other;
+            if (!skipNested()) return false;
+            v.text = s_.substr(start, i_ - start);              // kept so objects() can read it
+            return true;
+        }
         if (c == 't') { v.type = JsonValue::Bool; v.boolean = true;  return literal("true"); }
         if (c == 'f') { v.type = JsonValue::Bool; v.boolean = false; return literal("false"); }
         if (c == 'n') { v.type = JsonValue::Null; return literal("null"); }
@@ -181,4 +205,16 @@ long JsonObject::integer(const std::string& key, long def) const {
     auto it = values_.find(key);
     if (it == values_.end() || it->second.type != JsonValue::Number) return def;
     return std::strtol(it->second.text.c_str(), nullptr, 10);
+}
+
+bool JsonObject::objects(const std::string& key, std::vector<JsonObject>& out) const {
+    out.clear();
+    auto it = values_.find(key);
+    if (it == values_.end() || it->second.type != JsonValue::Other || it->second.text.empty() ||
+        it->second.text[0] != '[') return false;
+    std::vector<std::map<std::string, JsonValue> > maps;
+    Parser p(it->second.text);
+    if (!p.array(maps)) return false;
+    for (const auto& m : maps) { JsonObject o; o.values_ = m; out.push_back(o); }
+    return true;
 }

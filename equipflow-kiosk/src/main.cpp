@@ -8,6 +8,7 @@
 #include "LcdDisplay.h"
 #include "Pins.h"
 #include "RfidReader.h"
+#include "Watchdog.h"
 
 #ifdef USE_MOCK_API
 #include "MockApi.h"
@@ -32,7 +33,14 @@ static RfidReader rfid;
 static PressDetector pressYes, pressNo, pressNext;
 static Kiosk kiosk(api, lcd, buzzer);
 
+static const uint32_t kWatchdogSeconds = 10;     // longest the main loop may go without checking in
+
+static uint32_t clockNow() { return millis(); }
+
 #ifndef USE_MOCK_API
+// While a request is in flight the kiosk waits in a short loop: keep the buzzer sequencer running.
+static void whileWaiting() { buzzer.update(); }
+
 // Show a boot message for `ms`, keeping the buzzer sequencer running.
 static void bootMessage(const char* l1, const char* l2, Tone tone, uint32_t ms) {
     lcd.show(l1, l2);
@@ -65,23 +73,35 @@ void setup() {
     lcd.begin();
     buzzer.begin();
     rfid.begin();
+
+    Serial.printf("Reset reason: %s\n", Watchdog::lastResetReason());
+    if (Watchdog::lastResetWasFault()) {               // we froze or crashed and recovered by ourselves
+        lcd.show("Recovered from", "a freeze/crash");
+        delay(2000);
+    }
+
 #ifdef USE_MOCK_API
     seedMockData(api);
     Serial.println("Kiosk ready (MOCK API)");
 #else
+    http.begin();                                      // starts the request task
+    http.setWaitHook(whileWaiting);
     connectAndCheck();
     Serial.println("Kiosk ready");
 #endif
+    kiosk.setClock(clockNow);                          // re-read the time after every slow server call
     kiosk.begin(millis());
+    Watchdog::begin(kWatchdogSeconds);                 // from here on, a frozen loop resets the board
 }
 
 void loop() {
+    Watchdog::feed();
     uint32_t now = millis();
 
 #ifndef USE_MOCK_API
     wifi.update(now);
 
-    // Tell the server we are alive, but only while idle: a request can block for a few seconds.
+    // Tell the server we are alive, but only while idle: a request can take a few seconds.
     static uint32_t lastBeat = 0;
     if (kiosk.state() == Kiosk::State::Idle && wifi.connected() && (uint32_t)(now - lastBeat) >= 30000) {
         lastBeat = now;
@@ -100,6 +120,6 @@ void loop() {
     if (pressNo.update(digitalRead(PIN_BUTTON_NO) == LOW, now))     kiosk.onButton(Button::No, now);
     if (pressNext.update(digitalRead(PIN_BUTTON_NEXT) == LOW, now)) kiosk.onButton(Button::Next, now);
 
-    kiosk.tick(now);
+    kiosk.tick(millis());
     buzzer.update();
 }

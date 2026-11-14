@@ -73,7 +73,7 @@ std::string formatDue(const std::string& iso, int utcOffsetHours) {
     return buf;
 }
 
-std::string toLcdAscii(const std::string& in) {
+std::string toLcdAscii(const std::string& in, bool keepNewlines) {
     // U+00C0..U+00FF without accents (index = codepoint - 0xC0)
     static const char kLatin1[] =
         "AAAAAAACEEEEIIIIDNOOOOOxOUUUUYTs"      // C0-DF
@@ -99,6 +99,9 @@ std::string toLcdAscii(const std::string& in) {
         if (!ok) { out += '?'; ++i; continue; }
         i += extra + 1;
         if (cp >= 0x20 && cp < 0x7F) out += (char)cp;
+        else if (cp == '\n') out += keepNewlines ? '\n' : ' ';
+        else if (cp == '\t') out += ' ';
+        else if (cp == '\r') { /* dropped */ }
         else if (cp >= 0xC0 && cp <= 0xFF) out += kLatin1[cp - 0xC0];
         else if (cp == 0x2018 || cp == 0x2019) out += '\'';
         else if (cp == 0x201C || cp == 0x201D) out += '"';
@@ -107,4 +110,36 @@ std::string toLcdAscii(const std::string& in) {
         else out += '?';
     }
     return out;
+}
+
+std::vector<std::string> wrapText(const std::string& text, size_t width, size_t maxRows) {
+    std::vector<std::string> rows;
+    if (width == 0) return rows;
+    size_t i = 0;
+    while (i <= text.size() && rows.size() < maxRows) {
+        size_t nl = text.find('\n', i);
+        std::string para = text.substr(i, nl == std::string::npos ? std::string::npos : nl - i);
+        std::string cur;
+        size_t p = 0;
+        while (p < para.size()) {
+            while (p < para.size() && para[p] == ' ') ++p;
+            if (p >= para.size()) break;
+            size_t q = para.find(' ', p);
+            std::string word = para.substr(p, q == std::string::npos ? std::string::npos : q - p);
+            p = (q == std::string::npos) ? para.size() : q;
+            while (word.size() > width) {                       // a word longer than a whole row
+                if (!cur.empty()) { rows.push_back(cur); cur.clear(); }
+                rows.push_back(word.substr(0, width));
+                word = word.substr(width);
+            }
+            if (cur.empty()) cur = word;
+            else if (cur.size() + 1 + word.size() <= width) cur += " " + word;
+            else { rows.push_back(cur); cur = word; }
+        }
+        if (!cur.empty()) rows.push_back(cur);
+        if (nl == std::string::npos) break;
+        i = nl + 1;
+    }
+    if (rows.size() > maxRows) rows.resize(maxRows);
+    return rows;
 }

@@ -1,8 +1,8 @@
 #include "MockApi.h"
 
 void MockApi::addUser(const std::string& uid, const std::string& name,
-                      const std::string& blockedCode, bool tagActive) {
-    User u; u.name = name; u.blocked = blockedCode; u.active = tagActive;
+                      const std::string& blockedCode, bool tagActive, const std::string& role) {
+    User u; u.name = name; u.blocked = blockedCode; u.active = tagActive; u.role = role;
     users_[uid] = u;
 }
 
@@ -10,6 +10,11 @@ void MockApi::addItem(const std::string& uid, const std::string& name, const std
                       const std::string& status, int fineOnReturn) {
     Item i; i.name = name; i.type = type; i.status = status; i.fine = fineOnReturn;
     items_[uid] = i;
+}
+
+void MockApi::addPending(const std::string& srCode, const std::string& fullName) {
+    PendingUser p; p.srCode = srCode; p.fullName = fullName;
+    pending_.push_back(p);
 }
 
 std::string MockApi::itemStatus(const std::string& uid) const {
@@ -38,7 +43,7 @@ ScanResp MockApi::scan(const std::string& uid) {
     if (u != users_.end()) {
         r.kind = "user";
         if (!u->second.active) { r.ok = false; r.code = "tag_deactivated"; r.message = "Tag deactivated"; return r; }
-        r.ok = true; r.code = "ok"; r.message = "ID tag"; r.name = u->second.name; r.role = "student";
+        r.ok = true; r.code = "ok"; r.message = "ID tag"; r.name = u->second.name; r.role = u->second.role;
         return r;
     }
     auto i = items_.find(uid);
@@ -90,7 +95,7 @@ LoginResp MockApi::doLogin(const std::string& uid) {
     if (!u->second.active) { r.code = "tag_deactivated"; r.message = "Tag deactivated"; return r; }
     sessionOpen_ = true; sessionUid_ = uid;
     r.ok = true; r.code = "ok"; r.message = "Welcome";
-    r.name = u->second.name; r.role = "student"; r.sessionSeconds = 30;
+    r.name = u->second.name; r.role = u->second.role; r.sessionSeconds = 30;
     if (announceBlockedAtLogin) r.blocked = u->second.blocked;
     return r;
 }
@@ -106,21 +111,23 @@ ApiResult MockApi::logout() {
 
 // ------------------------------------------------------------------ borrow
 
-BorrowResp MockApi::borrow(const std::string& uid, bool agreed) {
-    ++borrowCalls; lastAgreed = agreed;
+BorrowResp MockApi::borrow(const std::string& uid, bool agreed, const std::string& termsVersion) {
+    ++borrowCalls; lastAgreed = agreed; lastTermsVersionSent = termsVersion;
     Transport t; bool apply;
     if (consumeFail("borrow", t, apply)) {
-        if (apply) doBorrow(uid, agreed);
+        if (apply) doBorrow(uid, agreed, termsVersion);
         BorrowResp r; r.transport = t; return r;
     }
-    return doBorrow(uid, agreed);
+    return doBorrow(uid, agreed, termsVersion);
 }
 
-BorrowResp MockApi::doBorrow(const std::string& uid, bool agreed) {
+BorrowResp MockApi::doBorrow(const std::string& uid, bool agreed, const std::string& termsVersion) {
     BorrowResp r;
     auto fail = [&](const char* code, const char* msg) { r.ok = false; r.code = code; r.message = msg; return r; };
 
     if (!sessionOpen_) return fail("no_session", "Tap your ID first");
+    if (!termsVersion.empty() && termsVersion != this->termsVersion)        // same order as the backend
+        return fail("terms_changed", "Terms updated. Try again");
     const User& u = users_[sessionUid_];
     if (!u.blocked.empty()) return fail(u.blocked.c_str(), "Blocked");
 
@@ -171,5 +178,51 @@ ReturnResp MockApi::doReturn(const std::string& uid) {
     r.ok = true; r.code = "ok"; r.hasFine = true; r.fine = item.fine;
     r.message = item.fine ? "Returned. Fine" : "Returned";
     item.status = "available"; item.borrower.clear();
+    return r;
+}
+
+// ------------------------------------------------------------------ terms / enrollment
+
+TermsResp MockApi::terms() {
+    ++termsCalls;
+    TermsResp r; Transport t; bool apply;
+    if (consumeFail("terms", t, apply)) { r.transport = t; return r; }
+    r.ok = true; r.code = "ok"; r.message = "Terms"; r.version = termsVersion; r.text = termsText;
+    return r;
+}
+
+PendingResp MockApi::pendingUsers(int limit) {
+    ++pendingCalls;
+    PendingResp r; Transport t; bool apply;
+    if (consumeFail("pending", t, apply)) { r.transport = t; return r; }
+    r.ok = true; r.code = "ok"; r.message = "Pending";
+    for (const PendingUser& p : pending_) {
+        if ((int)r.users.size() >= limit) break;
+        r.users.push_back(p);
+    }
+    return r;
+}
+
+ApiResult MockApi::enroll(const std::string& srCode, const std::string& userUid) {
+    ++enrollCalls;
+    Transport t; bool apply;
+    if (consumeFail("enroll", t, apply)) {
+        if (apply) doEnroll(srCode, userUid);
+        ApiResult r; r.transport = t; return r;
+    }
+    return doEnroll(srCode, userUid);
+}
+
+ApiResult MockApi::doEnroll(const std::string& srCode, const std::string& uid) {
+    ApiResult r;
+    auto fail = [&](const char* code, const char* msg) { r.ok = false; r.code = code; r.message = msg; return r; };
+    size_t idx = pending_.size();
+    for (size_t i = 0; i < pending_.size(); ++i) if (pending_[i].srCode == srCode) idx = i;
+    if (idx == pending_.size()) return fail("unknown_user", "Unknown SR-code");
+    if (items_.count(uid)) return fail("wrong_tag_type", "Item tag. Use an ID card");
+    if (users_.count(uid)) return fail("tag_taken", "Tag already used");
+    addUser(uid, pending_[idx].fullName);
+    pending_.erase(pending_.begin() + (long)idx);
+    r.ok = true; r.code = "ok"; r.message = "Registered";
     return r;
 }

@@ -1,4 +1,5 @@
 #include "RestApi.h"
+#include <cstdio>
 #include "Text.h"
 
 namespace {
@@ -20,7 +21,7 @@ void unknownTag(ApiResult& r) { r.ok = false; r.code = "unknown_tag"; r.message 
 bool RestApi::safeUid(const std::string& uid) {
     if (uid.empty() || uid.size() > 40) return false;
     for (char c : uid) {
-        bool ok = (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '-' || c == ':' || c == '_';
+        bool ok = (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '-' || c == ':' || c == '_' || c == '.';
         if (!ok) return false;
     }
     return true;
@@ -68,11 +69,14 @@ LoginResp RestApi::login(const std::string& uid) {
     return r;
 }
 
-BorrowResp RestApi::borrow(const std::string& itemUid, bool agreed) {
+BorrowResp RestApi::borrow(const std::string& itemUid, bool agreed, const std::string& termsVersion) {
     BorrowResp r;
     if (!safeUid(itemUid)) { unknownTag(r); return r; }
     JsonObject j;
-    std::string body = "{\"item_uid\":\"" + itemUid + "\",\"agreed\":" + (agreed ? "true" : "false") + "}";
+    std::string body = "{\"item_uid\":\"" + itemUid + "\",\"agreed\":" + (agreed ? "true" : "false");
+    if (!termsVersion.empty() && safeUid(termsVersion))      // the version the user actually saw
+        body += ",\"terms_version\":\"" + termsVersion + "\"";
+    body += "}";
     r.transport = call("POST", std::string(kBase) + "/borrow", &body, j);
     if (r.transport != Transport::Ok) return r;
     fillResult(j, r);
@@ -122,4 +126,48 @@ Transport RestApi::heartbeat() {
     Transport t = call("POST", std::string(kBase) + "/heartbeat", &body, j);
     if (t != Transport::Ok) return t;
     return j.boolean("ok") ? Transport::Ok : Transport::ServerError;
+}
+
+TermsResp RestApi::terms() {
+    TermsResp r;
+    JsonObject j;
+    r.transport = call("GET", std::string(kBase) + "/terms", nullptr, j);
+    if (r.transport != Transport::Ok) return r;
+    fillResult(j, r);
+    r.version = j.str("version");
+    r.text = toLcdAscii(j.str("text"), true);
+    return r;
+}
+
+PendingResp RestApi::pendingUsers(int limit) {
+    PendingResp r;
+    if (limit < 1) limit = 1;
+    if (limit > 200) limit = 200;
+    char path[48];
+    std::snprintf(path, sizeof path, "/pending-users?limit=%d", limit);
+    JsonObject j;
+    r.transport = call("GET", std::string(kBase) + path, nullptr, j);
+    if (r.transport != Transport::Ok) return r;
+
+    std::vector<JsonObject> rows;
+    if (!j.objects("users", rows)) { r.transport = Transport::ServerError; return r; }   // unexpected shape
+    for (const JsonObject& u : rows) {
+        PendingUser p;
+        p.srCode = u.str("sr_code");
+        p.fullName = toLcdAscii(u.str("full_name"));
+        if (!p.srCode.empty()) r.users.push_back(p);
+    }
+    r.ok = true; r.code = "ok"; r.message = "Pending";     // this endpoint has no ok/code of its own
+    return r;
+}
+
+ApiResult RestApi::enroll(const std::string& srCode, const std::string& userUid) {
+    ApiResult r;
+    if (!safeUid(userUid)) { unknownTag(r); return r; }
+    if (!safeUid(srCode)) { r.ok = false; r.code = "unknown_user"; r.message = "Unknown SR-code"; return r; }
+    JsonObject j;
+    std::string body = "{\"sr_code\":\"" + srCode + "\",\"user_uid\":\"" + userUid + "\"}";
+    r.transport = call("POST", std::string(kBase) + "/enroll", &body, j);
+    if (r.transport == Transport::Ok) fillResult(j, r);
+    return r;
 }

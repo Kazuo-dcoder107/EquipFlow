@@ -11,10 +11,13 @@ public:
 
     ScanResp      scan(const std::string& uid) override;
     LoginResp     login(const std::string& uid) override;
-    BorrowResp    borrow(const std::string& itemUid, bool agreed) override;
+    BorrowResp    borrow(const std::string& itemUid, bool agreed, const std::string& termsVersion) override;
     ReturnResp    returnItem(const std::string& itemUid) override;
     EquipmentResp equipment(const std::string& itemUid) override;
     ApiResult     logout() override;
+    TermsResp     terms() override;
+    PendingResp   pendingUsers(int limit) override;
+    ApiResult     enroll(const std::string& srCode, const std::string& userUid) override;
 
     Transport heartbeat();            // Ok only if the server answered {"ok": true}
 

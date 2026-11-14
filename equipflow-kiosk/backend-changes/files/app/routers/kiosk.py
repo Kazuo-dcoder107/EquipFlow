@@ -6,7 +6,7 @@ Only a bad API key returns an HTTP error (401).
 """
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -14,9 +14,9 @@ from app.config import SESSION_TIMEOUT_SECONDS
 from app.database import get_db
 from app.models import CategoryType, Equipment, Kiosk, User, UserStatus
 from app.schemas.kiosk import (BorrowIn, EnrollIn, EquipmentOut, LoginIn, LoginOut,
-                               PendingUser, PendingUsersOut, ResultOut, ReturnIn, ScanOut)
+                               PendingUser, PendingUsersOut, ResultOut, ReturnIn, ScanOut, TermsOut)
 from app.security import get_kiosk
-from app.services import borrowing, enrollment, sessions
+from app.services import borrowing, enrollment, sessions, terms
 from app.services.tags import normalize_tag, resolve_tag
 
 router = APIRouter(prefix="/api/kiosk", tags=["kiosk"])
@@ -29,9 +29,11 @@ def heartbeat(kiosk: Kiosk = Depends(get_kiosk)):
 
 
 @router.get("/pending-users", response_model=PendingUsersOut)
-def pending_users(kiosk: Kiosk = Depends(get_kiosk), db: Session = Depends(get_db)):
+def pending_users(limit: int = Query(50, ge=1, le=200), kiosk: Kiosk = Depends(get_kiosk),
+                  db: Session = Depends(get_db)):
+    """Accounts waiting for an ID tag, oldest first. `limit` keeps the reply small for the ESP32."""
     rows = db.scalars(select(User).where(User.status == UserStatus.pending_enrollment)
-                      .order_by(User.created_at)).all()
+                      .order_by(User.created_at).limit(limit)).all()
     return PendingUsersOut(users=[PendingUser(sr_code=u.sr_code, full_name=u.full_name)
                                   for u in rows])
 
@@ -40,6 +42,13 @@ def pending_users(kiosk: Kiosk = Depends(get_kiosk), db: Session = Depends(get_d
 def enroll(body: EnrollIn, kiosk: Kiosk = Depends(get_kiosk), db: Session = Depends(get_db)):
     r = enrollment.enroll(db, body.sr_code, body.user_uid, kiosk_id=kiosk.id)
     return ResultOut(ok=r.ok, code=r.code, message=r.message)
+
+
+@router.get("/terms", response_model=TermsOut)
+def kiosk_terms(kiosk: Kiosk = Depends(get_kiosk)):
+    """The text to show before a hardware borrow, plus its version (see services/terms.py)."""
+    version, text = terms.current_terms()
+    return TermsOut(ok=True, code="ok", message="Terms", version=version, text=text)
 
 
 @router.get("/scan/{uid}", response_model=ScanOut)
@@ -95,6 +104,8 @@ def borrow(body: BorrowIn, kiosk: Kiosk = Depends(get_kiosk), db: Session = Depe
     user_id = sessions.current_user_id(kiosk.id)
     if user_id is None:
         return ResultOut(ok=False, code="no_session", message="Tap your ID first")
+    if body.terms_version is not None and body.terms_version != terms.current_terms()[0]:
+        return ResultOut(ok=False, code="terms_changed", message="Terms updated. Try again")
     r = borrowing.borrow(db, body.item_uid, user_id, agreed=body.agreed, kiosk_id=kiosk.id)
     return ResultOut(ok=r.ok, code=r.code, message=r.message,
                      due_at=r.transaction.due_at if r.transaction else None)

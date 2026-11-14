@@ -18,6 +18,10 @@ const CodeMessage kTable[] = {
     {"item_unavailable",   "Not available",  "",                Tone::Warning},
     {"agreement_required", "Accept terms",   "first",           Tone::Warning},
     {"not_borrowed",       "Not borrowed",   "",                Tone::Warning},
+    {"terms_changed",      "Terms updated",  "Try again",       Tone::Warning},
+    // enrollment
+    {"already_enrolled",   "Already enrolled", "",              Tone::Warning},
+    {"tag_taken",          "Tag already used", "Use another tag", Tone::Error},
 };
 }
 
@@ -25,9 +29,3 @@ const CodeMessage* findMessage(const std::string& code) {
     for (const CodeMessage& m : kTable) if (code == m.code) return &m;
     return nullptr;
 }
-
-const char* const kTermsText[] = {
-    "Handle with care",
-    "Return on time",
-};
-const int kTermsTextCount = sizeof(kTermsText) / sizeof(kTermsText[0]);

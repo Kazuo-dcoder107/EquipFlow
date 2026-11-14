@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <vector>
 
 // Result of talking to the server. Anything but Ok means we got NO usable answer,
 // so the action must be treated as unconfirmed.
@@ -40,4 +41,15 @@ struct ReturnResp : ApiResult {          // POST /api/kiosk/return
 struct EquipmentResp : ApiResult {       // GET /api/kiosk/equipment/{uid}
     std::string name, type, status;
     bool requiresAgreement = false;
+};
+
+struct TermsResp : ApiResult {           // GET /api/kiosk/terms
+    std::string version;                 // changes whenever the text changes
+    std::string text;                    // lines separated by \n
+};
+
+struct PendingUser { std::string srCode, fullName; };
+
+struct PendingResp : ApiResult {         // GET /api/kiosk/pending-users?limit=N
+    std::vector<PendingUser> users;      // accounts waiting for an ID tag, oldest first
 };

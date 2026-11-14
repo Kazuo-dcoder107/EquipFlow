@@ -1,10 +1,12 @@
 // STEP 3 bring-up: Wi-Fi + server, with no kiosk logic. Watch the serial monitor.
 //   1. connects to Wi-Fi and calls /heartbeat (checks address AND API key)
-//   2. tap any tag: prints exactly what the server says about it
+//   2. fetches the kiosk terms and the list of accounts waiting for an ID tag
+//   3. tap any tag: prints exactly what the server says about it
 // Needs include/secrets.h. If the heartbeat fails, read the message printed below it.
 #include <Arduino.h>
 #include "EspHttpTransport.h"
 #include "RestApi.h"
+#include "Text.h"
 #include "RfidReader.h"
 #include "WifiLink.h"
 #include "secrets.h"
@@ -29,11 +31,28 @@ void setup() {
     Serial.begin(115200);
     delay(300);
     rfid.begin();
+    http.begin();                                       // starts the request task
     Serial.printf("Connecting to %s ...\n", WIFI_SSID);
     wifi.begin(WIFI_SSID, WIFI_PASSWORD);
     if (!wifi.waitConnected(20000)) { Serial.println("Wi-Fi FAILED (check SSID/password; 2.4 GHz only)"); return; }
     Serial.printf("Wi-Fi OK, ESP32 address %s\n", WiFi.localIP().toString().c_str());
     Serial.printf("Heartbeat to %s: %s\n", API_BASE_URL, describe(api.heartbeat()));
+
+    TermsResp t = api.terms();
+    Serial.printf("Terms: %s", describe(t.transport));
+    if (t.transport == Transport::Ok) {
+        Serial.printf(" version=%s\n", t.version.c_str());
+        std::vector<std::string> rows = wrapText(t.text, 15, 24);
+        for (size_t i = 0; i < rows.size(); i++) Serial.printf("  |%-15s|\n", rows[i].c_str());
+    } else Serial.println();
+
+    PendingResp p = api.pendingUsers(5);
+    Serial.printf("Waiting for an ID tag: %s", describe(p.transport));
+    if (p.transport == Transport::Ok) {
+        Serial.printf(" (%d shown)\n", (int)p.users.size());
+        for (size_t i = 0; i < p.users.size(); i++)
+            Serial.printf("  %s  %s\n", p.users[i].srCode.c_str(), p.users[i].fullName.c_str());
+    } else Serial.println();
     Serial.println("Tap a tag...");
 }
 

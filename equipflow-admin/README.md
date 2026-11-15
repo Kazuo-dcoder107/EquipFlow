@@ -36,9 +36,9 @@ departments and programs, and one overdue book. (For a real installation, create
 | `npm run build` | Production build into `dist/` |
 | `npm run preview` | Serves the production build on port 3001 |
 | `npm test` | Runs the tests (no backend needed) |
-| `EQUIPFLOW_E2E=1 npm test` | Also runs the end-to-end tests against the real running API + demo data |
+| `EQUIPFLOW_E2E=1 npm test` | Also runs the end-to-end tests (`e2e.test.jsx`, `e2e.catalog.test.jsx`) against the real running API + demo data |
 
-## What is in it (so far)
+## What is in it
 
 | Page | What an admin does there |
 |---|---|
@@ -47,7 +47,10 @@ departments and programs, and one overdue book. (For a real installation, create
 | **Approvals** | Teachers and staff who signed up and chose their role. **Approve** lets them link their ID card; **Reject** asks for an optional reason (emailed if the server has email set up) and removes the request, so they can sign up again. The side menu shows how many are waiting. |
 | **Users** | Everyone, with chips to browse by **department** and then **program** (with counts), plus search, role, status and year level. For lost cards: **Deactivate card** (stops working at once) and **Reissue card** (unlinks it so a new one can be linked at the kiosk). |
 
-Still to come: equipment, categories and genres, transactions and penalties, reports, and managing the program list.
+| **Equipment** | Three tabs. **Items**: search and filter (type, category, status), add, edit and delete; genres appear only for books. **Categories**: loan days and fine per day; the type is locked once a category has items. **Genres**: add, rename, delete (books move to another genre, or are left without one). |
+| **Loans** | **Loans** tab: the borrowing history with search, state and date filters, and **Mark lost** / **Mark damaged** (which charge the borrower). **Fines** tab: unpaid fines first, with the total owed; **Mark paid**, **Waive** (with a note) and **Set unpaid** to fix a mistake. |
+| **Reports** | Two tabs, each with a date range, **Download CSV** and **Print / Save as PDF** (a clean light page, without the menu and buttons, that says which report, which dates and who made it). **Usage**: summary numbers, most borrowed, often returned late, by category, busiest weekdays and hours, items that may need maintenance. **Fines paid**: who paid each fine and the date and time, newest first, with the total collected and number of people; switch to *Waived fines* to see forgiven ones. |
+| **Programs** | The degree programs students choose when they sign up, grouped by department: add, rename, delete. A program that students use cannot be deleted until you choose where they move. |
 
 ## How the code is organised (a reading guide)
 
@@ -63,6 +66,11 @@ It follows the borrower site's structure, so what you learn there carries over.
 | `src/components/Modal.jsx`, `ConfirmDialog.jsx` | An accessible pop-up: focus, Escape, click outside |
 | `src/events.js` | How one page tells another something changed (approvals -> the menu count) |
 | `src/pages/Approvals.jsx` | Actions with confirmation, busy states, messages and errors |
+| `src/components/FormDialog.jsx`, `Tabs.jsx`, `Pager.jsx` | The three small pieces the newer pages share: a dialog with a form, tabs, and page buttons |
+| `src/pages/Equipment.jsx`, `pages/equipment/*` | Tabs with an add/edit form in a dialog; one small file per tab |
+| `src/pages/Transactions.jsx`, `pages/transactions/*` | Loans and fines; actions that ask first and say what happened |
+| `src/pages/Reports.jsx`, `pages/reports/*`, `src/utils/csv.js`, `components/PrintMeta.jsx` | Reports with a date range, bars drawn with plain `div`s, a CSV download, and a print layout (`@media print` at the end of `styles.css`) |
+| `src/pages/Programs.jsx` | Lists that are added to, renamed and deleted (with "move them first") |
 | `src/pages/Users.jsx` | Filters that reset paging, chips, a table that becomes cards on a phone, pagination |
 | `src/theme.jsx` | Light / dark / system, saved on the device |
 | `src/noPwa.test.js` | A guard that fails if anyone adds PWA pieces to this site |

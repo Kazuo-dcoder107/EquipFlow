@@ -4,7 +4,10 @@ import { api } from '../api'
 import { useAuth } from '../auth'
 import { APPROVALS_CHANGED } from '../events'
 import { useTheme } from '../theme'
-import { ApprovalsIcon, DashboardIcon, LogoMark, LogoutIcon, MoonIcon, SunIcon, UsersIcon } from './Icons'
+import {
+  ApprovalsIcon, DashboardIcon, EquipmentIcon, LogoMark, LogoutIcon, MoonIcon, ProgramsIcon, ReportsIcon,
+  SunIcon, TransactionsIcon, UsersIcon,
+} from './Icons'
 
 // How many sign-up requests are waiting, for the number next to "Approvals". It reloads when an
 // approval is decided (the Approvals page announces that, see events.js).
@@ -45,6 +48,10 @@ export default function Layout() {
             {pending > 0 && <span className="count" aria-label={`${pending} waiting`}>{pending}</span>}
           </NavLink>
           <NavLink to="/users"><UsersIcon /><span>Users</span></NavLink>
+          <NavLink to="/equipment"><EquipmentIcon /><span>Equipment</span></NavLink>
+          <NavLink to="/transactions"><TransactionsIcon /><span>Loans</span></NavLink>
+          <NavLink to="/reports"><ReportsIcon /><span>Reports</span></NavLink>
+          <NavLink to="/programs"><ProgramsIcon /><span>Programs</span></NavLink>
         </nav>
 
         <div className="sidebar-footer">

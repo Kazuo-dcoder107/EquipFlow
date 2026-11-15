@@ -33,6 +33,33 @@ export const UsersIcon = (p) => (
   </Icon>
 )
 
+export const EquipmentIcon = (p) => (
+  <Icon {...p}>
+    <rect x="3.5" y="5" width="17" height="11" rx="1.8" />
+    <path d="M8 20h8M12 16v4" />
+  </Icon>
+)
+
+export const TransactionsIcon = (p) => (
+  <Icon {...p}>
+    <path d="M4 8h14l-3-3M20 16H6l3 3" />
+  </Icon>
+)
+
+export const ReportsIcon = (p) => (
+  <Icon {...p}>
+    <path d="M4 20V4M4 20h16" />
+    <path d="M8 16v-4M12 16V8M16 16v-6" />
+  </Icon>
+)
+
+export const ProgramsIcon = (p) => (
+  <Icon {...p}>
+    <path d="M3 9l9-4 9 4-9 4-9-4z" />
+    <path d="M7 11.5V16c0 1.2 2.2 2.5 5 2.5s5-1.3 5-2.5v-4.5" />
+  </Icon>
+)
+
 export const SunIcon = (p) => (
   <Icon {...p}>
     <circle cx="12" cy="12" r="4" />

@@ -96,6 +96,27 @@ describe('protected pages', () => {
     expect(localStorage.getItem('equipflow-admin.token')).toBeNull()
   })
 
+  it('sign out leaves the sign-in form blank, ready for the next person', async () => {
+    mockApi({
+      'POST /api/auth/admin/login': { access_token: 'tok', role: 'admin', full_name: 'A' },
+      ...dashboard,
+    })
+    renderApp('/login', { loggedIn: false })
+    await signIn()
+    await userEvent.click(await screen.findByRole('button', { name: 'Sign out' }))
+
+    expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Username')).toHaveValue('')
+    expect(screen.getByLabelText('Password')).toHaveValue('')
+  })
+
+  it('asks the browser not to refill the sign-in form', () => {
+    mockApi({})
+    renderApp('/login', { loggedIn: false })
+    expect(screen.getByLabelText('Username')).toHaveAttribute('autocomplete', 'off')
+    expect(screen.getByLabelText('Password')).toHaveAttribute('autocomplete', 'new-password')
+  })
+
   it('show a page-not-found message for an unknown address', async () => {
     mockApi({ ...dashboard })
     renderApp('/nope')

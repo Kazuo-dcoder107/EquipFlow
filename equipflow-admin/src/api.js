@@ -101,4 +101,36 @@ export const api = {
   reissueCard: (id) => request(`/api/users/${id}/reissue-tag`, { method: 'POST' }),
 
   departmentsOverview: () => request('/api/departments/overview'),
+
+  // equipment, categories, genres
+  equipment: (params) => request('/api/equipment', { params }),
+  createEquipment: (json) => request('/api/equipment', { method: 'POST', json }),
+  updateEquipment: (id, json) => request(`/api/equipment/${id}`, { method: 'PATCH', json }),
+  deleteEquipment: (id) => request(`/api/equipment/${id}`, { method: 'DELETE' }),
+  markLost: (id, json) => request(`/api/equipment/${id}/mark-lost`, { method: 'POST', json }),
+  markDamaged: (id, json) => request(`/api/equipment/${id}/mark-damaged`, { method: 'POST', json }),
+
+  categories: () => request('/api/categories'),
+  createCategory: (json) => request('/api/categories', { method: 'POST', json }),
+  updateCategory: (id, json) => request(`/api/categories/${id}`, { method: 'PATCH', json }),
+  deleteCategory: (id) => request(`/api/categories/${id}`, { method: 'DELETE' }),
+
+  genres: () => request('/api/genres'),
+  createGenre: (name) => request('/api/genres', { method: 'POST', json: { name } }),
+  renameGenre: (id, name) => request(`/api/genres/${id}`, { method: 'PATCH', json: { name } }),
+  deleteGenre: (id, params) => request(`/api/genres/${id}`, { method: 'DELETE', params }),
+
+  // loans and fines
+  transactions: (params) => request('/api/transactions', { params }),
+  penalties: (params) => request('/api/penalties', { params }),
+  settlePenalty: (id, status, notes) =>
+    request(`/api/penalties/${id}`, { method: 'PATCH', json: notes ? { status, notes } : { status } }),
+
+  // reports
+  usageReport: (params) => request('/api/reports/usage', { params }),
+
+  // programs
+  createProgram: (department_id, name) => request('/api/programs', { method: 'POST', json: { department_id, name } }),
+  renameProgram: (id, name) => request(`/api/programs/${id}`, { method: 'PATCH', json: { name } }),
+  deleteProgram: (id, params) => request(`/api/programs/${id}`, { method: 'DELETE', params }),
 }

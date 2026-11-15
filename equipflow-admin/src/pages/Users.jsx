@@ -129,7 +129,7 @@ export default function Users() {
       </section>
 
       <div className="filters">
-        <input type="search" placeholder="Search name, SR-code or email" aria-label="Search" value={search}
+        <input type="search" placeholder="Search name, SR-code / ID or email" aria-label="Search" value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(0) }} />
         <select aria-label="Role" value={role} onChange={(e) => chooseRole(e.target.value)}>
           <option value="">All roles</option>

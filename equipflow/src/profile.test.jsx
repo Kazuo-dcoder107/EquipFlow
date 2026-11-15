@@ -14,9 +14,14 @@ describe('Register: the details students must give', () => {
 
   async function fillBasics(role = 'student') {
     await userEvent.selectOptions(screen.getByLabelText('I am a'), role)
-    await userEvent.type(screen.getByLabelText('SR-code'), '24-7777')
+    if (role === 'student') {
+      await userEvent.type(screen.getByLabelText(/^SR-code/), '24-77777') // e-mail follows from it
+    } else {
+      await userEvent.selectOptions(await screen.findByLabelText(/^Department/), 'CET')
+      await userEvent.type(screen.getByLabelText(/^(Teacher|Staff) ID/), 'CET 45')
+      await userEvent.type(screen.getByLabelText(/^Email/), 'nina@g.batstate-u.edu.ph')
+    }
     await userEvent.type(screen.getByLabelText('Full name'), 'Nina New')
-    await userEvent.type(screen.getByLabelText('Email'), 'nina@example.com')
     await userEvent.type(screen.getByLabelText(/^Password/), 'password123')
     await userEvent.type(screen.getByLabelText('Confirm password'), 'password123')
   }
@@ -29,14 +34,14 @@ describe('Register: the details students must give', () => {
     }
   })
 
-  it('does not ask teachers or staff for any of them', async () => {
+  it('asks teachers and staff only for their department, not age, year level or program', async () => {
     api()
     renderApp('/register', { loggedIn: false })
     await screen.findByLabelText(/^Age/)
     for (const role of ['teacher', 'staff']) {
       await userEvent.selectOptions(screen.getByLabelText('I am a'), role)
       expect(screen.queryByLabelText(/^Age/)).not.toBeInTheDocument()
-      expect(screen.queryByLabelText(/^Department/)).not.toBeInTheDocument()
+      expect(await screen.findByLabelText(/^Department/)).toBeRequired()
       expect(screen.queryByLabelText(/^Year level/)).not.toBeInTheDocument()
       expect(screen.queryByLabelText(/^Program/)).not.toBeInTheDocument()
     }
@@ -238,6 +243,85 @@ describe('Profile: the About you card', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Save' }))
     expect(await screen.findByRole('status')).toHaveTextContent('Saved')
     expect(body(callsTo(fetchMock, 'PUT', '/api/me/profile')[0])).toEqual({ age: null, department_id: null, year_level: null, program_id: null })
+  })
+
+  it('labels a teacher\'s ID as a Teacher ID, not an SR-code', async () => {
+    profileApi(TEACHER)
+    renderApp('/profile')
+    expect(await screen.findByLabelText(/^Teacher ID/)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/^SR-code/)).not.toBeInTheDocument()
+  })
+
+  it('updates a student\'s SR-code and sends the matching e-mail with it', async () => {
+    const fetchMock = profileApi(STUDENT)
+    renderApp('/profile')
+    const sr = await screen.findByLabelText(/^SR-code/)
+    await userEvent.clear(sr)
+    await userEvent.type(sr, '25-12345')
+    expect(screen.getByLabelText(/^Email/)).toHaveValue('25-12345@g.batstate-u.edu.ph')
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await screen.findByRole('status')
+    expect(body(callsTo(fetchMock, 'PUT', '/api/me/profile')[0])).toMatchObject({
+      sr_code: '25-12345', email: '25-12345@g.batstate-u.edu.ph',
+    })
+  })
+
+  it('refuses a malformed SR-code on update without calling the API', async () => {
+    const fetchMock = profileApi(STUDENT)
+    renderApp('/profile')
+    const sr = await screen.findByLabelText(/^SR-code/)
+    await userEvent.clear(sr)
+    await userEvent.type(sr, '25-123')
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('SR-code must look like 24-12345')
+    expect(callsTo(fetchMock, 'PUT', '/api/me/profile')).toHaveLength(0)
+  })
+
+  it('updates a teacher\'s ID and e-mail, and refuses an SR-code or a wrong domain', async () => {
+    const fetchMock = profileApi(TEACHER)
+    renderApp('/profile')
+    const id = await screen.findByLabelText(/^Teacher ID/)
+    const email = screen.getByLabelText(/^Email/)
+
+    await userEvent.clear(id)
+    await userEvent.type(id, '24-12345')
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('do not use SR-codes')
+
+    await userEvent.clear(id)
+    await userEvent.type(id, 'cics 07')
+    await userEvent.clear(email)
+    await userEvent.type(email, 'tess@gmail.com')
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('@g.batstate-u.edu.ph')
+    expect(callsTo(fetchMock, 'PUT', '/api/me/profile')).toHaveLength(0)
+
+    await userEvent.clear(email)
+    await userEvent.type(email, 'tess.teacher@g.batstate-u.edu.ph')
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await screen.findByRole('status')
+    expect(body(callsTo(fetchMock, 'PUT', '/api/me/profile')[0])).toMatchObject({
+      sr_code: 'CICS 07', email: 'tess.teacher@g.batstate-u.edu.ph',
+    })
+  })
+
+  it('refuses a teacher ID that does not start with the chosen department, and capitalizes what is typed', async () => {
+    const fetchMock = profileApi(TEACHER)
+    renderApp('/profile')
+    const id = await screen.findByLabelText(/^Teacher ID/)
+    await userEvent.selectOptions(screen.getByLabelText(/^Department/), 'CICS')
+    await userEvent.clear(id)
+    await userEvent.type(id, 'cet 45')
+    expect(id).toHaveValue('CET 45')
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('must start with your department, CICS')
+    expect(callsTo(fetchMock, 'PUT', '/api/me/profile')).toHaveLength(0)
+
+    await userEvent.clear(id)
+    await userEvent.type(id, 'cics 45')
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await screen.findByRole('status')
+    expect(body(callsTo(fetchMock, 'PUT', '/api/me/profile')[0])).toMatchObject({ department_id: 1, sr_code: 'CICS 45' })
   })
 
   it('shows what the server says when it refuses the details', async () => {

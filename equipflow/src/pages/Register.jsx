@@ -4,6 +4,8 @@ import { api } from '../api'
 import { useApi } from '../hooks/useApi'
 import { emptyProfileValues, studentDepartments, toProfilePayload } from '../utils/profile'
 import AboutFields from '../components/AboutFields'
+import IdentityFields from '../components/IdentityFields'
+import { departmentCode, identityError, normalizeId } from '../utils/identity'
 import ErrorBox from '../components/ErrorBox'
 import Loading from '../components/Loading'
 
@@ -23,16 +25,32 @@ export default function Register() {
   const [busy, setBusy] = useState(false)
   const [created, setCreated] = useState(null) // the account the API created, once it exists
 
-  // One small function updates any field: update('email')(event)
+  // One small function updates any field: update('password')(event)
   const update = (field) => (event) => setForm({ ...form, [field]: event.target.value })
 
+  // A student's ID is an SR-code and a teacher's or staff member's is a department number, so the
+  // two formats must never carry over when the role changes: start the ID and e-mail again.
+  // The department answers belong to the role too (a student's list has programs, a teacher's does not).
+  const changeRole = (event) => {
+    setForm({ ...form, role: event.target.value, sr_code: '', email: '' })
+    setAbout(emptyProfileValues())
+  }
+
   const isStudent = form.role === 'student'
+  // teachers and staff choose their department at the top; their ID must start with its code
+  const department = departments.data?.find((d) => String(d.id) === String(about.department_id))
   // Students cannot register until the school's departments and programs have loaded
   const noPrograms = isStudent && departments.data && studentDepartments(departments.data).length === 0
 
   async function handleSubmit(event) {
     event.preventDefault()
     setError('')
+    const idNumber = normalizeId(form.role, form.sr_code)
+    const problem = identityError(form.role, idNumber, form.email, isStudent ? null : department)
+    if (problem) {
+      setError(problem)
+      return
+    }
     if (form.password !== form.confirm) {
       setError('The two passwords do not match.')
       return
@@ -40,9 +58,9 @@ export default function Register() {
     setBusy(true)
     try {
       const { confirm, ...fields } = form // everything except the confirm box
-      // students send age, department, year level and program too; teachers and staff do not
-      const extra = isStudent ? toProfilePayload(about, 'student') : {}
-      setCreated(await api.register({ ...fields, ...extra, sr_code: form.sr_code.trim(), full_name: form.full_name.trim() }))
+      // students send age, department, year level and program; teachers and staff send their department
+      const extra = isStudent ? toProfilePayload(about, 'student') : { department_id: Number(about.department_id) }
+      setCreated(await api.register({ ...fields, ...extra, sr_code: idNumber, email: form.email.trim().toLowerCase(), full_name: form.full_name.trim() }))
     } catch (err) {
       setError(err.message)
     } finally {
@@ -81,7 +99,7 @@ export default function Register() {
 
         <label>
           I am a
-          <select value={form.role} onChange={update('role')}>
+          <select value={form.role} onChange={changeRole}>
             {ROLES.map((role) => (
               <option key={role.value} value={role.value}>{role.label}</option>
             ))}
@@ -91,17 +109,31 @@ export default function Register() {
           <p className="notice notice-info small">Teacher and staff accounts need an admin's approval before you can borrow.</p>
         )}
 
-        <label>
-          SR-code
-          <input value={form.sr_code} onChange={update('sr_code')} required />
-        </label>
+        {!isStudent && (
+          <label>
+            Department
+            <select
+              value={about.department_id}
+              onChange={(e) => setAbout({ ...about, department_id: e.target.value })}
+              disabled={!departments.data}
+              required
+            >
+              <option value="">{departments.data ? 'Choose department' : 'Loading departments...'}</option>
+              {(departments.data || []).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+          </label>
+        )}
+
+        <IdentityFields
+          role={form.role}
+          departmentCode={departmentCode(department)}
+          idNumber={form.sr_code}
+          email={form.email}
+          onChange={(patch) => setForm({ ...form, ...patch })}
+        />
         <label>
           Full name
           <input value={form.full_name} onChange={update('full_name')} autoComplete="name" required />
-        </label>
-        <label>
-          Email
-          <input type="email" value={form.email} onChange={update('email')} autoComplete="email" required />
         </label>
         <label>
           Password
@@ -136,7 +168,7 @@ export default function Register() {
 
         {error && <p className="form-error" role="alert">{error}</p>}
 
-        <button className="btn btn-primary" disabled={busy || (isStudent && !departments.data) || noPrograms}>
+        <button className="btn btn-primary" disabled={busy || !departments.data || noPrograms}>
           {busy ? 'Creating...' : 'Create account'}
         </button>
       </form>

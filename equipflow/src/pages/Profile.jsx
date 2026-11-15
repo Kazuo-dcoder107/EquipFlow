@@ -5,6 +5,7 @@ import { useInstallPrompt } from '../hooks/useInstallPrompt'
 import { PREFERENCES, useTheme } from '../theme'
 import { prepareAvatar } from '../utils/image'
 import { ROLE_LABELS } from '../utils/format'
+import { idLabel } from '../utils/identity'
 import AboutYouCard from '../components/AboutYouCard'
 import Avatar from '../components/Avatar'
 import { CameraIcon, MonitorIcon, MoonIcon, SunIcon } from '../components/Icons'
@@ -98,7 +99,7 @@ export default function Profile() {
       <AboutYouCard />
 
       <dl className="card details">
-        <dt>SR-code</dt><dd>{user.sr_code}</dd>
+        <dt>{idLabel(user.role)}</dt><dd>{user.sr_code}</dd>
         <dt>Email</dt><dd>{user.email}</dd>
         <dt>ID card</dt><dd>{cardStatus(user)}</dd>
       </dl>

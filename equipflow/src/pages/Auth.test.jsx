@@ -36,7 +36,7 @@ describe('Login page', () => {
     })
     renderApp('/login', { loggedIn: false })
 
-    await userEvent.type(screen.getByLabelText('SR-code'), '24-0001')
+    await userEvent.type(screen.getByLabelText('SR-code or Staff ID'), '24-00001')
     await userEvent.type(screen.getByLabelText('Password'), 'secret123')
     await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
 
@@ -48,7 +48,7 @@ describe('Login page', () => {
     mockApi({ 'POST /api/auth/login': () => jsonResponse({ detail: 'Incorrect SR-code or password' }, 401) })
     renderApp('/login', { loggedIn: false })
 
-    await userEvent.type(screen.getByLabelText('SR-code'), '24-0001')
+    await userEvent.type(screen.getByLabelText('SR-code or Staff ID'), '24-00001')
     await userEvent.type(screen.getByLabelText('Password'), 'wrongpass')
     await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
 
@@ -60,9 +60,14 @@ describe('Login page', () => {
 describe('Register page', () => {
   async function fill(role) {
     await userEvent.selectOptions(screen.getByLabelText('I am a'), role)
-    await userEvent.type(screen.getByLabelText('SR-code'), 'T-100')
+    if (role === 'student') {
+      await userEvent.type(screen.getByLabelText(/^SR-code/), '24-10001') // the e-mail is filled in from it
+    } else {
+      await userEvent.selectOptions(await screen.findByLabelText(/^Department/), 'CICS')
+      await userEvent.type(screen.getByLabelText(/^(Teacher|Staff) ID/), 'cics 01') // shown and sent as CICS 01
+      await userEvent.type(screen.getByLabelText(/^Email/), 'tess@g.batstate-u.edu.ph')
+    }
     await userEvent.type(screen.getByLabelText('Full name'), 'Tess Teacher')
-    await userEvent.type(screen.getByLabelText('Email'), 'tess@example.com')
     // the Register password label also contains its hint text, so match by its start
     await userEvent.type(screen.getByLabelText(/^Password/), 'password123')
     await userEvent.type(screen.getByLabelText('Confirm password'), 'password123')
@@ -97,7 +102,7 @@ describe('Register page', () => {
     expect(await screen.findByRole('heading', { name: 'Request sent' })).toBeInTheDocument()
     const sent = JSON.parse(registrations(fetchMock)[0][1].body)
     expect(sent).toEqual({
-      sr_code: 'T-100', full_name: 'Tess Teacher', email: 'tess@example.com', password: 'password123', role: 'teacher',
+      sr_code: 'CICS 01', full_name: 'Tess Teacher', email: 'tess@g.batstate-u.edu.ph', password: 'password123', role: 'teacher', department_id: 1,
     })
   })
 
@@ -128,5 +133,131 @@ describe('Register page', () => {
     await fill('student')
     await userEvent.click(screen.getByRole('button', { name: 'Create account' }))
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('SR-code already registered'))
+  })
+
+  it('fills in a student\'s e-mail from the SR-code and does not let it be edited', async () => {
+    mockApi({ 'GET /api/departments': DEPARTMENTS })
+    renderApp('/register', { loggedIn: false })
+    await userEvent.type(screen.getByLabelText(/^SR-code/), '24-10001')
+    const email = screen.getByLabelText(/^Email/)
+    expect(email).toHaveValue('24-10001@g.batstate-u.edu.ph')
+    expect(email).toHaveAttribute('readonly')
+  })
+
+  it('refuses a malformed SR-code for a student without calling the API', async () => {
+    const fetchMock = mockApi({ 'GET /api/departments': DEPARTMENTS })
+    renderApp('/register', { loggedIn: false })
+    await fill('student')
+    await userEvent.clear(screen.getByLabelText(/^SR-code/))
+    await userEvent.type(screen.getByLabelText(/^SR-code/), '24-0001')
+    await userEvent.click(screen.getByRole('button', { name: 'Create account' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('SR-code must look like 24-12345')
+    expect(registrations(fetchMock)).toHaveLength(0)
+  })
+
+  it('does not accept an SR-code from a teacher or staff member', async () => {
+    const fetchMock = mockApi({ 'GET /api/departments': DEPARTMENTS })
+    renderApp('/register', { loggedIn: false })
+    await userEvent.selectOptions(screen.getByLabelText('I am a'), 'teacher')
+    await userEvent.selectOptions(await screen.findByLabelText(/^Department/), 'CICS')
+    await userEvent.type(screen.getByLabelText(/^Teacher ID/), '24-10001')
+    await userEvent.type(screen.getByLabelText(/^Email/), 'tess@g.batstate-u.edu.ph')
+    await userEvent.type(screen.getByLabelText('Full name'), 'Tess Teacher')
+    await userEvent.type(screen.getByLabelText(/^Password/), 'password123')
+    await userEvent.type(screen.getByLabelText('Confirm password'), 'password123')
+    await userEvent.click(screen.getByRole('button', { name: 'Create account' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('do not use SR-codes')
+    expect(registrations(fetchMock)).toHaveLength(0)
+  })
+
+  it('refuses a teacher e-mail outside @g.batstate-u.edu.ph', async () => {
+    const fetchMock = mockApi({ 'GET /api/departments': DEPARTMENTS })
+    renderApp('/register', { loggedIn: false })
+    await userEvent.selectOptions(screen.getByLabelText('I am a'), 'staff')
+    await userEvent.selectOptions(await screen.findByLabelText(/^Department/), 'CET')
+    await userEvent.type(screen.getByLabelText(/^Staff ID/), 'CET 45')
+    await userEvent.type(screen.getByLabelText(/^Email/), 'sam@gmail.com')
+    await userEvent.type(screen.getByLabelText('Full name'), 'Sam Staff')
+    await userEvent.type(screen.getByLabelText(/^Password/), 'password123')
+    await userEvent.type(screen.getByLabelText('Confirm password'), 'password123')
+    await userEvent.click(screen.getByRole('button', { name: 'Create account' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('@g.batstate-u.edu.ph')
+    expect(registrations(fetchMock)).toHaveLength(0)
+  })
+})
+
+describe('Register: the ID must start with the person\'s department', () => {
+  async function teacherForm(department, id) {
+    await userEvent.selectOptions(screen.getByLabelText('I am a'), 'teacher')
+    await userEvent.selectOptions(await screen.findByLabelText(/^Department/), department)
+    await userEvent.type(screen.getByLabelText(/^Teacher ID/), id)
+    await userEvent.type(screen.getByLabelText(/^Email/), 'tess@g.batstate-u.edu.ph')
+    await userEvent.type(screen.getByLabelText('Full name'), 'Tess Teacher')
+    await userEvent.type(screen.getByLabelText(/^Password/), 'password123')
+    await userEvent.type(screen.getByLabelText('Confirm password'), 'password123')
+  }
+
+  it('refuses an ID from another department', async () => {
+    const fetchMock = mockApi({ 'GET /api/departments': DEPARTMENTS })
+    renderApp('/register', { loggedIn: false })
+    await teacherForm('CICS', 'CET 45')
+    await userEvent.click(screen.getByRole('button', { name: 'Create account' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('must start with your department, CICS')
+    expect(registrations(fetchMock)).toHaveLength(0)
+  })
+
+  it('shows the ID in capitals as it is typed', async () => {
+    mockApi({ 'GET /api/departments': DEPARTMENTS })
+    renderApp('/register', { loggedIn: false })
+    await userEvent.selectOptions(screen.getByLabelText('I am a'), 'staff')
+    await userEvent.type(await screen.findByLabelText(/^Staff ID/), 'cet 45')
+    expect(screen.getByLabelText(/^Staff ID/)).toHaveValue('CET 45')
+  })
+
+  it('uses the chosen department\'s code as the example', async () => {
+    mockApi({ 'GET /api/departments': DEPARTMENTS })
+    renderApp('/register', { loggedIn: false })
+    await userEvent.selectOptions(screen.getByLabelText('I am a'), 'teacher')
+    await userEvent.selectOptions(await screen.findByLabelText(/^Department/), 'COE')
+    expect(screen.getByLabelText(/^Teacher ID/)).toHaveAttribute('placeholder', 'COE 01')
+  })
+
+  it('cannot check the letters for a department without a code, such as General Service', async () => {
+    const fetchMock = mockApi({ 'GET /api/departments': DEPARTMENTS, 'POST /api/auth/register': () => jsonResponse({ id: 9, role: 'teacher', status: 'pending_approval' }, 201) })
+    renderApp('/register', { loggedIn: false })
+    await teacherForm('General Service', 'GS 03')
+    await userEvent.click(screen.getByRole('button', { name: 'Create account' }))
+    expect(await screen.findByRole('heading', { name: 'Request sent' })).toBeInTheDocument()
+    expect(registrations(fetchMock)).toHaveLength(1)
+  })
+})
+
+describe('Login page starts blank', () => {
+  it('shows empty boxes again after signing out and coming back', async () => {
+    mockApi({
+      'POST /api/auth/login': { access_token: 'tok123', role: 'student', full_name: 'Juan Dela Cruz' },
+      'GET /api/auth/me': STUDENT,
+      ...HOME_DATA,
+      'GET /api/departments': DEPARTMENTS,
+    })
+    renderApp('/login', { loggedIn: false })
+    await userEvent.type(screen.getByLabelText('SR-code or Staff ID'), '24-00001')
+    await userEvent.type(screen.getByLabelText('Password'), 'secret123')
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    await screen.findByRole('heading', { name: 'Hello, Juan' })
+
+    await userEvent.click(screen.getByRole('link', { name: /Profile of/ }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Sign out' }))
+
+    expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
+    expect(screen.getByLabelText('SR-code or Staff ID')).toHaveValue('')
+    expect(screen.getByLabelText('Password')).toHaveValue('')
+  })
+
+  it('asks the browser not to refill the form', () => {
+    mockApi({})
+    renderApp('/login', { loggedIn: false })
+    expect(screen.getByLabelText('SR-code or Staff ID')).toHaveAttribute('autocomplete', 'off')
+    expect(screen.getByLabelText('Password')).toHaveAttribute('autocomplete', 'new-password')
   })
 })

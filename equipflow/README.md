@@ -142,3 +142,20 @@ building so the site knows where the API is.
 - The fine QR code holds the ticket reference (e.g. `EQUIPFLOW-FINE-000012`). Paying is done at the
   counter by an admin; there is no online payment.
 - Borrowing itself happens at the kiosk (tap your ID, scan the item), not on this site.
+
+
+## ID numbers and e-mail addresses
+
+| Role | ID (sent to the API as `sr_code`) | E-mail |
+|---|---|---|
+| Student | SR-code `2*-*****`, e.g. `24-12345` | `<sr-code>@g.batstate-u.edu.ph`, filled in automatically and read-only |
+| Teacher / staff | Department code + 2-digit number, e.g. `CICS 01`, `CET 45` (SR-codes are refused) | `name@g.batstate-u.edu.ph` |
+
+The rules live in `src/utils/identity.js` and are used by the sign-up form and the Profile page
+(`src/components/IdentityFields.jsx`). On the Profile page an ID or e-mail is only checked and sent when it was changed.
+The sign-in page always starts blank (no browser auto-fill, and it clears itself if restored from the back/forward cache).
+
+Teachers and staff choose their department when they sign up, and their ID must start with that department's code
+(`CICS 01` for CICS). IDs are shown in capitals as they are typed. The code is the department's `code` if the API
+sends one, otherwise its name when that is a short code (CICS, CET ...). A department without one, such as
+"General Service", is not checked.

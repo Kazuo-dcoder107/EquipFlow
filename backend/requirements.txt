@@ -8,3 +8,4 @@ pillow
 email-validator
 python-dotenv
 apscheduler<4
+psycopg2-binary

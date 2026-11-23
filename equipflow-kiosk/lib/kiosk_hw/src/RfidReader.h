@@ -11,4 +11,6 @@ public:
     uint8_t version();             // 0x91/0x92 = genuine, 0x88/0xB2 = common clones, 0x00/0xFF = wiring problem
 private:
     MFRC522 rc_{PIN_RC522_SS, PIN_RC522_RST};
+    bool held_ = false;
+    uint32_t lastSeen_ = 0;
 };

@@ -11,6 +11,9 @@ export default function ItemCard({ item, reason }) {
             {item.category}
             {item.genre && <span className="chip">{item.genre}</span>}
           </p>
+          {item.asset_number && (
+            <p className="muted small">Asset No.: {item.asset_number}</p>
+          )}
         </div>
         {item.status && <StatusBadge status={item.status} />}
       </div>

@@ -13,6 +13,9 @@ export default function LoanCard({ loan }) {
         <div>
           <h3>{loan.equipment_name}</h3>
           <p className="muted">{loan.category}</p>
+          {loan.asset_number && (
+            <p className="muted small">Asset No.: {loan.asset_number}</p>
+          )}
         </div>
         {isOut ? <span className={`due due-${due.tone}`}>{due.label}</span> : <StatusBadge status={loan.state} />}
       </div>

@@ -8,19 +8,49 @@ const queryOf = (call) => Object.fromEntries(new URL(call[0]).searchParams)
 const callsTo = (fetchMock, path) => fetchMock.mock.calls.filter((c) => new URL(c[0]).pathname === path)
 
 describe('Home', () => {
-  const rec = { id: 5, name: 'Clean Code', category: 'Book', type: 'book', genre: 'Programming', status: 'available', reason: 'Because you often borrow Programming books' }
+  const rec = {
+    id: 5,
+    name: 'Clean Code',
+    category: 'Book',
+    type: 'book',
+    genre: 'Programming',
+    status: 'available',
+    reason: 'Because you often borrow Programming books',
+  }
+
   const base = {
     ...ME,
-    'GET /api/me/summary': { borrowed_now: 2, overdue_now: 1, unpaid_total: 75 },
+    'GET /api/me/summary': {
+      borrowed_now: 2,
+      overdue_now: 1,
+      unpaid_total: 75,
+    },
     'GET /api/me/transactions': {
       total: 3,
       items: [
         loan({ id: 1, equipment_name: 'Later Laptop', due_at: hoursFromNow(96) }),
-        loan({ id: 2, equipment_name: 'Late Camera', due_at: hoursFromNow(-30), state: 'overdue', fine: 50 }),
-        loan({ id: 3, equipment_name: 'Done Book', state: 'returned', returned_at: hoursFromNow(-5) }),
+        loan({
+          id: 2,
+          equipment_name: 'Late Camera',
+          due_at: hoursFromNow(-30),
+          state: 'overdue',
+          fine: 50,
+        }),
+        loan({
+          id: 3,
+          equipment_name: 'Done Book',
+          state: 'returned',
+          returned_at: hoursFromNow(-5),
+        }),
       ],
     },
-    'GET /api/me/recommendations': { strategy: 'history', borrowing_blocked: null, top_categories: [], top_genres: [], items: [rec] },
+    'GET /api/me/recommendations': {
+      strategy: 'history',
+      borrowing_blocked: null,
+      top_categories: [],
+      top_genres: [],
+      items: [rec],
+    },
   }
 
   it('shows the summary, the loans that are due first, and a suggestion with its reason', async () => {
@@ -33,51 +63,99 @@ describe('Home', () => {
 
     const loans = await screen.findAllByRole('heading', { level: 3 })
     const names = loans.map((h) => h.textContent)
-    expect(names.indexOf('Late Camera')).toBeLessThan(names.indexOf('Later Laptop')) // soonest due first
-    expect(names).not.toContain('Done Book') // returned loans are not "due soon"
+    expect(names.indexOf('Late Camera')).toBeLessThan(names.indexOf('Later Laptop'))
+    expect(names).not.toContain('Done Book')
     expect(screen.getByText('Because you often borrow Programming books')).toBeInTheDocument()
   })
 
   it('keeps working when one section fails', async () => {
-    mockApi({ ...base, 'GET /api/me/recommendations': () => jsonResponse({ detail: 'boom' }, 500) })
+    mockApi({
+      ...base,
+      'GET /api/me/recommendations': () => jsonResponse({ detail: 'boom' }, 500),
+    })
     renderApp('/')
     expect(await screen.findByText('Late Camera')).toBeInTheDocument()
     expect(await screen.findByRole('alert')).toHaveTextContent('boom')
   })
 
   it('tells a teacher still waiting for approval what is happening', async () => {
-    mockApi({ ...base, 'GET /api/auth/me': { ...STUDENT, role: 'teacher', status: 'pending_approval', rfid_linked: false } })
+    mockApi({
+      ...base,
+      'GET /api/auth/me': {
+        ...STUDENT,
+        role: 'teacher',
+        status: 'pending_approval',
+        rfid_linked: false,
+      },
+    })
     renderApp('/')
     expect(await screen.findByText('Waiting for approval')).toBeInTheDocument()
   })
 
   it('tells a student to link their ID card', async () => {
-    mockApi({ ...base, 'GET /api/auth/me': { ...STUDENT, status: 'pending_enrollment', rfid_linked: false } })
+    mockApi({
+      ...base,
+      'GET /api/auth/me': {
+        ...STUDENT,
+        status: 'pending_enrollment',
+        rfid_linked: false,
+      },
+    })
     renderApp('/')
     expect(await screen.findByText(/Link your ID card at the kiosk/)).toBeInTheDocument()
   })
 
   it('warns about a deactivated card', async () => {
-    mockApi({ ...base, 'GET /api/auth/me': { ...STUDENT, rfid_active: false } })
+    mockApi({
+      ...base,
+      'GET /api/auth/me': { ...STUDENT, rfid_active: false },
+    })
     renderApp('/')
     expect(await screen.findByText('ID card deactivated')).toBeInTheDocument()
   })
 })
 
 describe('My loans', () => {
-  const data = {
-    ...ME,
-    'GET /api/me/transactions': {
-      total: 4,
-      items: [
-        loan({ id: 1, equipment_name: 'Later Laptop', due_at: hoursFromNow(120) }),
-        loan({ id: 2, equipment_name: 'Late Camera', due_at: hoursFromNow(-50), state: 'overdue', fine: 75 }),
-        loan({ id: 3, equipment_name: 'Old Book', state: 'returned', borrowed_at: hoursFromNow(-500), returned_at: hoursFromNow(-400), fine: 0 }),
-        loan({ id: 4, equipment_name: 'New Book', state: 'returned', borrowed_at: hoursFromNow(-100), returned_at: hoursFromNow(-60), fine: 25 }),
-      ],
-    },
-  }
-
+const data = {
+  ...ME,
+  'GET /api/me/transactions': {
+    total: 4,
+    items: [
+      loan({
+        id: 1,
+        equipment_name: 'Later Laptop',
+        asset_number: 'EQ_EF-000001',
+        due_at: hoursFromNow(120),
+      }),
+      loan({
+        id: 2,
+        equipment_name: 'Late Camera',
+        asset_number: 'EQ_EF-000002',
+        due_at: hoursFromNow(-50),
+        state: 'overdue',
+        fine: 75,
+      }),
+      loan({
+        id: 3,
+        equipment_name: 'Old Book',
+        asset_number: 'BK_EF-000002',
+        state: 'returned',
+        borrowed_at: hoursFromNow(-500),
+        returned_at: hoursFromNow(-400),
+        fine: 0,
+      }),
+      loan({
+        id: 4,
+        equipment_name: 'New Book',
+        asset_number: 'BK_EF-000001',
+        state: 'returned',
+        borrowed_at: hoursFromNow(-100),
+        returned_at: hoursFromNow(-60),
+        fine: 25,
+      }),
+    ],
+  },
+}
   it('lists current loans soonest first with days left or days late, and the live fine', async () => {
     mockApi(data)
     renderApp('/loans')
@@ -88,6 +166,7 @@ describe('My loans', () => {
     expect(screen.getByText('Overdue by 3 days')).toBeInTheDocument()
     expect(screen.getByText('Due in 4 days')).toBeInTheDocument()
     expect(screen.getByText('Fine so far: \u20B175')).toBeInTheDocument()
+    expect(screen.getByText('Asset No.: EQ_EF-000002')).toBeInTheDocument()
   })
 
   it('shows finished loans, newest first, on the History tab', async () => {
@@ -99,6 +178,7 @@ describe('My loans', () => {
     expect(titles).toEqual(['New Book', 'Old Book'])
     expect(screen.getAllByText('Returned')).toHaveLength(2)
     expect(screen.getByText('Fine: \u20B125')).toBeInTheDocument()
+    expect(screen.getByText('Asset No.: BK_EF-000001')).toBeInTheDocument()
   })
 
   it('explains an empty list', async () => {

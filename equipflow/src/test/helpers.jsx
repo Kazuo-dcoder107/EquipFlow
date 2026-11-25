@@ -55,10 +55,21 @@ export const hoursFromNow = (h) => new Date(Date.now() + h * HOUR).toISOString()
 
 export function loan(overrides = {}) {
   return {
-    id: 1, equipment_id: 1, equipment_name: 'Laptop 05', category: 'Laptop', type: 'hardware',
-    user_id: 1, sr_code: '24-0001', full_name: 'Juan Dela Cruz',
-    borrowed_at: hoursFromNow(-24), due_at: hoursFromNow(48), returned_at: null,
-    state: 'borrowed', fine: 0, ...overrides,
+    id: 1,
+    equipment_id: 1,
+    asset_number: 'EQ_EF-000001',
+    equipment_name: 'Laptop 05',
+    category: 'Laptop',
+    type: 'hardware',
+    user_id: 1,
+    sr_code: '24-0001',
+    full_name: 'Juan Dela Cruz',
+    borrowed_at: hoursFromNow(-24),
+    due_at: hoursFromNow(48),
+    returned_at: null,
+    state: 'borrowed',
+    fine: 0,
+    ...overrides,
   }
 }
 

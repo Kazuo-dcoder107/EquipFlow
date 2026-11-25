@@ -186,7 +186,8 @@ export default function Items() {
                 <tr key={item.id}>
                   <td data-label="Item" className="person-cell">
                     <strong>{item.name}</strong>
-                    <span className="muted small block">{item.tag_uid}</span>
+                    <span className="muted small block">Asset No.: {item.asset_number}</span>
+                    <span className="muted small block">Tag UID: {item.tag_uid}</span>
                   </td>
                   <td data-label="Category">
                     <div>{item.category}{item.genre && <span className="muted small block">{item.genre}</span>}</div>

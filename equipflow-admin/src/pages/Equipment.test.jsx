@@ -9,7 +9,7 @@ const CATS = [
 ]
 const GENRES = [{ id: 1, name: 'Fiction', book_count: 2 }, { id: 2, name: 'Science', book_count: 0 }]
 const item = (overrides = {}) => ({
-  id: 1, name: 'Laptop 01', category_id: 1, category: 'Laptop', type: 'hardware', genre_id: null, genre: null, status: 'available',
+  id: 1, asset_number: 'EQ_EF-000001', name: 'Laptop 01', category_id: 1, category: 'Laptop', type: 'hardware', genre_id: null, genre: null, status: 'available',
   condition: 'good', tag_uid: '04AA0001', replacement_cost: 30000, created_at: '2026-03-01T00:00:00Z', ...overrides,
 })
 
@@ -30,10 +30,25 @@ function api(extra = {}, items = [item()]) {
 
 describe('Equipment page: items', () => {
   it('is in the menu, and lists each item with its tag, category, status, condition and cost', async () => {
-    api({}, [item(), item({ id: 2, name: 'Clean Code', category_id: 2, category: 'Book', type: 'book', genre_id: 1, genre: 'Fiction', status: 'overdue', condition: 'damaged', tag_uid: '04BB0002', replacement_cost: 450 })])
+    api({}, [item(), 
+      item({
+        id: 2,
+        asset_number: 'BK_EF-000001',
+        name: 'Clean Code',
+        category_id: 2,
+        category: 'Book',
+        type: 'book',
+        genre_id: 1,
+        genre: 'Fiction',
+        status: 'overdue',
+        condition: 'damaged',
+        tag_uid: '04BB0002',
+        replacement_cost: 450
+})])
     renderApp('/equipment')
     const row = (await screen.findByText('Clean Code', { selector: 'strong' })).closest('tr')
     expect(row).toHaveTextContent('04BB0002')
+    expect(row).toHaveTextContent('BK_EF-000001')
     expect(row).toHaveTextContent('Book')
     expect(row).toHaveTextContent('Fiction')
     expect(row).toHaveTextContent('Overdue')

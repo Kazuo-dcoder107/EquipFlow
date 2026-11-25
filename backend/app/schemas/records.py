@@ -19,6 +19,7 @@ class TransactionState(str, Enum):
 class TransactionOut(BaseModel):
     id: int
     equipment_id: int
+    asset_number: str
     equipment_name: str
     category: str
     type: CategoryType
@@ -92,6 +93,7 @@ class MySummary(BaseModel):
 def transaction_out(tx: Transaction, now) -> TransactionOut:
     return TransactionOut(
         id=tx.id, equipment_id=tx.equipment_id, equipment_name=tx.equipment.name,
+        asset_number=tx.equipment.asset_number,
         category=tx.equipment.category.name, type=tx.equipment.category.type,
         user_id=tx.user_id, sr_code=tx.user.sr_code, full_name=tx.user.full_name,
         borrowed_at=tx.borrowed_at, due_at=tx.due_at, returned_at=tx.returned_at,

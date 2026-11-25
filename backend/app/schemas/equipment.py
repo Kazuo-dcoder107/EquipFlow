@@ -104,6 +104,7 @@ class EquipmentUpdate(BaseModel):
 
 class EquipmentOut(BaseModel):
     id: int
+    asset_number: str
     name: str
     category_id: int
     category: str

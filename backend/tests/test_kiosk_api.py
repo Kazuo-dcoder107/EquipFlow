@@ -25,8 +25,8 @@ def client():
             User(sr_code="A", full_name="A", email="a@x", rfid_uid="U1", status=UserStatus.active),
             User(sr_code="P1", full_name="Pending One", email="p1@x"),
             User(sr_code="P2", full_name="Pending Two", email="p2@x"),
-            Equipment(rfid_uid="L1", name="Laptop 1", category=hw),
-            Equipment(rfid_uid="B1", name="Book 1", category=book),
+            Equipment(asset_number="EQ_EF-000001", rfid_uid="L1", name="Laptop 1", category=hw),
+            Equipment(asset_number="BK_EF-000001", rfid_uid="B1", name="Book 1", category=book),
         ])
         s.commit()
 

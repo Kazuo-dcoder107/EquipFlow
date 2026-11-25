@@ -10,6 +10,7 @@ from sqlalchemy.pool import StaticPool
 from app.database import Base, get_db
 from app.main import app
 from app.models import *  # noqa: F401,F403
+from app.models.equipment import AssetNumberSequence
 from app.security import hash_password
 from app.services.borrowing import _now
 
@@ -35,8 +36,22 @@ class Env:
                   for i in range(1, 4)],
             ])
             s.flush()
-            mk = lambda tag, name, cat, genre=None, **kw: Equipment(
-                rfid_uid=tag, name=name, category=cat, genre=genre, **kw)
+            asset_counts = {"BK": 0, "EQ": 0}
+
+            def mk(tag, name, cat, genre=None, **kw):
+                prefix = "BK" if cat.type == CategoryType.book else "EQ"
+                asset_counts[prefix] += 1
+
+                asset_number = f"{prefix}_EF-{asset_counts[prefix]:06d}"
+
+                return Equipment(
+                    asset_number=asset_number,
+                    rfid_uid=tag,
+                    name=name,
+                    category=cat,
+                    genre=genre,
+                    **kw,
+                )
             s.add_all([
                 mk("P1", "Python Basics", book, prog), mk("P2", "Clean Code", book, prog),
                 mk("P3", "Algorithms", book, prog), mk("P4", "Databases", book, prog),
@@ -45,6 +60,12 @@ class Env:
                 mk("L1", "Laptop 01", laptop), mk("L2", "Laptop 02", laptop),
                 mk("L3", "Laptop 03", laptop), mk("K1", "Arduino Kit 01", kit),
             ])
+
+            s.add_all([
+                AssetNumberSequence(prefix="BK", last_value=7),
+                AssetNumberSequence(prefix="EQ", last_value=4),
+            ])
+
             s.commit()
 
         def override():

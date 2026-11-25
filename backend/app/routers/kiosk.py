@@ -111,9 +111,26 @@ def borrow(body: BorrowIn, kiosk: Kiosk = Depends(get_kiosk), db: Session = Depe
                      due_at=r.transaction.due_at if r.transaction else None)
 
 
+
 @router.post("/return", response_model=ResultOut)
 def return_item(body: ReturnIn, kiosk: Kiosk = Depends(get_kiosk),
                 db: Session = Depends(get_db)):
-    r = borrowing.return_item(db, body.item_uid, kiosk_id=kiosk.id)
-    return ResultOut(ok=r.ok, code=r.code, message=r.message,
-                     fine=borrowing.current_fine(r.transaction) if r.transaction else None)
+    user_id = sessions.current_user_id(kiosk.id)
+
+    if user_id is None:
+        return ResultOut(
+            ok=False,
+            code="no_session",
+            message="Tap your ID first"
+        )
+
+    r = borrowing.return_item(
+        db, body.item_uid, user_id, kiosk_id=kiosk.id
+    )
+
+    return ResultOut(
+        ok=r.ok,
+        code=r.code,
+        message=r.message,
+        fine=borrowing.current_fine(r.transaction) if r.transaction else None
+    )

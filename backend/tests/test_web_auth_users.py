@@ -114,7 +114,12 @@ def test_delete_rules(env):
     used = c.post("/api/auth/register", json={**REG, "sr_code": "24-0002", "email": "b@x.com"}).json()["id"]
     with Session() as s:
         cat = Category(name="Book", type=CategoryType.book, loan_days=7, fine_per_day=5)
-        eq = Equipment(rfid_uid="B1", name="Book 1", category=cat)
+        eq = Equipment(
+            asset_number="BK_EF-000001",
+            rfid_uid="B1",
+            name="Book 1",
+            category=cat,
+        )
         s.add_all([cat, eq]); s.flush()
         from app.models.user import utcnow
         s.add(Transaction(equipment_id=eq.id, user_id=used, due_at=utcnow()))

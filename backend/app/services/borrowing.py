@@ -177,42 +177,79 @@ def borrow(db: Session, item_uid: str, user_id: int,
     return Result(True, "ok", "Borrowed", tx)
 
 
-def return_item(db: Session, item_uid: str, kiosk_id: Optional[int] = None) -> Result:
+
+def return_item(db: Session, item_uid: str, user_id: int, kiosk_id: Optional[int] = None) -> Result:
     item_uid = normalize_tag(item_uid)
+
     item = db.scalar(select(Equipment).where(Equipment.rfid_uid == item_uid))
+
     if item is None:
         if resolve_tag(db, item_uid)[0] == "user":
-            return _fail(db, EventType.return_, "wrong_tag_type", "ID tag. Scan the item",
-                         kiosk_id=kiosk_id)
-        return _fail(db, EventType.return_, "unknown_item", "Unknown tag", kiosk_id=kiosk_id)
-    ids = dict(kiosk_id=kiosk_id, equipment_id=item.id)
+            return _fail(
+                db, EventType.return_, "wrong_tag_type",
+                "ID tag. Scan the item",
+                user_id=user_id, kiosk_id=kiosk_id
+            )
+
+        return _fail(
+            db, EventType.return_, "unknown_item", "Unknown tag",
+            user_id=user_id, kiosk_id=kiosk_id
+        )
+
+    ids = dict(
+        user_id=user_id,
+        kiosk_id=kiosk_id,
+        equipment_id=item.id
+    )
 
     tx = db.scalar(select(Transaction).where(
-        Transaction.equipment_id == item.id, Transaction.returned_at.is_(None),
-        Transaction.status != TransactionStatus.lost))
+        Transaction.equipment_id == item.id,
+        Transaction.returned_at.is_(None),
+        Transaction.status != TransactionStatus.lost
+    ))
+
     if tx is None:
-        if item.status == EquipmentStatus.missing:   # a missing item turned up
-            item.status = EquipmentStatus.available
-            _log(db, EventType.return_, EventResult.success, **ids)
-            db.commit()
-            return Result(True, "found", "Item found")
-        return _fail(db, EventType.return_, "not_borrowed", "Not borrowed", **ids)
+        return _fail(
+            db, EventType.return_, "not_borrowed",
+            "No active borrowing record", **ids
+        )
+
+    # Only the original borrower can return this item.
+    if tx.user_id != user_id:
+        return _fail(
+            db, EventType.return_, "not_your_item",
+            "This item was borrowed by another user", **ids
+        )
 
     now = _now()
     tx.returned_at = now
     tx.status = TransactionStatus.returned
+
     fine = compute_fine(tx.due_at, now, item.category.fine_per_day)
+
     if fine > 0:
         days = fine // item.category.fine_per_day
+
         penalty = db.scalar(select(Penalty).where(
-            Penalty.transaction_id == tx.id, Penalty.type == PenaltyType.overdue_fine))
+            Penalty.transaction_id == tx.id,
+            Penalty.type == PenaltyType.overdue_fine
+        ))
+
         if penalty:
             penalty.amount = fine
         else:
-            db.add(Penalty(transaction_id=tx.id, user_id=tx.user_id,
-                           type=PenaltyType.overdue_fine, amount=fine,
-                           status=PenaltyStatus.unpaid, notes=f"{days} day(s) overdue"))
+            db.add(Penalty(
+                transaction_id=tx.id,
+                user_id=tx.user_id,
+                type=PenaltyType.overdue_fine,
+                amount=fine,
+                status=PenaltyStatus.unpaid,
+                notes=f"{days} day(s) overdue"
+            ))
+
     item.status = EquipmentStatus.available
-    _log(db, EventType.return_, EventResult.success, user_id=tx.user_id, **ids)
+
+    _log(db, EventType.return_, EventResult.success, **ids)
     db.commit()
+
     return Result(True, "ok", f"Returned. Fine P{fine}" if fine else "Returned", tx)

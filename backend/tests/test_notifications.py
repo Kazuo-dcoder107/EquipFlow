@@ -102,7 +102,7 @@ def test_returned_and_lost_loans_get_no_email(e):
     e.borrow("BBBB2222", 2); e.borrow("CCCC3333", 2)
     now = set_times(e, "BBBB2222", timedelta(days=9), -timedelta(days=2))
     set_times(e, "CCCC3333", timedelta(days=9), -timedelta(days=2))
-    assert e.ret("BBBB2222")["ok"]
+    assert e.ret("BBBB2222", 2)["ok"]
     e.c.post(f"/api/equipment/{e.ids['CCCC3333']}/mark-lost", headers=e.admin, json={})
     assert run(e, box, now=now).overdue_sent == 0 and box.sent == []
 

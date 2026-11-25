@@ -39,10 +39,18 @@ class Env:
                      rfid_uid="UT", status=UserStatus.active, password_hash=pw),
                 User(sr_code="F1", full_name="Stan Staff", email="f@x", role=UserRole.staff,
                      rfid_uid="UF", status=UserStatus.active, password_hash=pw),
-                *[Equipment(rfid_uid=f"B{i}", name=f"Book {i}", category=book, replacement_cost=100)
-                  for i in range(1, 7)],
-                Equipment(rfid_uid="L1", name="Laptop 1", category=hw),
-                Equipment(rfid_uid="L2", name="Laptop 2", category=hw),
+                *[
+                    Equipment(
+                        asset_number=f"BK_EF-{i:06d}",
+                        rfid_uid=f"B{i}",
+                        name=f"Book {i}",
+                        category=book,
+                        replacement_cost=100,
+                    )
+                    for i in range(1, 7)
+                ],
+                Equipment(asset_number="EQ_EF-000001", rfid_uid="L1", name="Laptop 1", category=hw),
+                Equipment(asset_number="EQ_EF-000002", rfid_uid="L2", name="Laptop 2", category=hw),
             ])
             s.commit()
 
@@ -138,9 +146,17 @@ def test_logout_ends_session_and_login_switches_user(e):
         assert s.query(Transaction).one().user_id == e.user_id("T1")
 
 
-def test_return_needs_no_login(e):
-    e.login("US"); assert e.borrow("B1")["ok"]
+def test_return_requires_login(e):
+    e.login("US")
+    assert e.borrow("B1")["ok"]
+
     e.c.post("/api/kiosk/logout", headers=K)
+
+    result = e.ret("B1")
+    assert not result["ok"]
+    assert result["code"] == "no_session"
+
+    e.login("US")
     assert e.ret("B1")["ok"]
 
 

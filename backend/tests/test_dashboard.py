@@ -49,8 +49,8 @@ def test_dashboard_counts_follow_the_borrowing_flow(e):
     assert (item["equipment_name"], item["sr_code"], item["days_overdue"], item["fine"]) == ("Laptop 01", "24-0001", 3, 75)
     assert item["due_at"].endswith("Z")
 
-    assert e.ret("BBBB2222")["ok"]
-    assert e.ret("AAAA1111")["message"] == "Returned. Fine P75"
+    assert e.ret("BBBB2222", 2)["ok"]
+    assert e.ret("AAAA1111", 1)["message"] == "Returned. Fine P75"
     s = stats(e)
     assert s["today"] == {"borrows": 3, "returns": 2}
     assert s["penalties"] == {"unpaid_count": 1, "unpaid_total": 75}
@@ -67,7 +67,7 @@ def test_overdue_status_is_current_when_reading_equipment(e):
     items = e.c.get("/api/equipment?status=overdue", headers=e.ana).json()
     assert items["total"] == 1 and items["items"][0]["name"] == "Laptop 01"
     assert e.item_status("AAAA1111")["status"] == "overdue"
-    assert e.ret("AAAA1111")["ok"]
+    assert e.ret("AAAA1111", 1)["ok"]
     assert e.item_status("AAAA1111")["status"] == "available"
 
 

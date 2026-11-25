@@ -27,6 +27,22 @@ bool RestApi::safeUid(const std::string& uid) {
     return true;
 }
 
+bool safeSrCode(const std::string& code) {
+    if (code.empty() || code.size() > 20) return false;
+
+    for (char c : code) {
+        bool ok = (c >= '0' && c <= '9') ||
+                  (c >= 'A' && c <= 'Z') ||
+                  (c >= 'a' && c <= 'z') ||
+                  c == '-' || c == ':' || c == '_' ||
+                  c == '.' || c == ' ';
+
+        if (!ok) return false;
+    }
+
+    return true;
+}
+
 Transport RestApi::call(const char* method, const std::string& path, const std::string* body, JsonObject& out) {
     HttpResponse r = http_.request(method, path, body);
     if (r.transport != Transport::Ok) return r.transport;
@@ -164,7 +180,7 @@ PendingResp RestApi::pendingUsers(int limit) {
 ApiResult RestApi::enroll(const std::string& srCode, const std::string& userUid) {
     ApiResult r;
     if (!safeUid(userUid)) { unknownTag(r); return r; }
-    if (!safeUid(srCode)) { r.ok = false; r.code = "unknown_user"; r.message = "Unknown SR-code"; return r; }
+    if (!safeSrCode(srCode)) { r.ok = false; r.code = "unknown_user"; r.message = "Unknown SR-code"; return r; }
     JsonObject j;
     std::string body = "{\"sr_code\":\"" + srCode + "\",\"user_uid\":\"" + userUid + "\"}";
     r.transport = call("POST", std::string(kBase) + "/enroll", &body, j);
